@@ -19,7 +19,7 @@ def channel_state_signal(entry_id: str, channel_id: int) -> str:
 
 class DiscordChatBridgeEntity(Entity):
     _attr_has_entity_name = False
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(
         self,

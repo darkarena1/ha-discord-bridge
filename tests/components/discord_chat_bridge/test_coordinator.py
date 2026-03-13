@@ -71,3 +71,26 @@ def test_build_guild_state_reads_channel_flags() -> None:
     assert state.channels[100].enabled is True
     assert state.channels[100].posting_enabled is True
     assert state.channels[100].api_enabled is True
+
+
+def test_build_guild_state_disables_posting_and_api_for_disabled_channels() -> None:
+    state = build_guild_state(
+        guild_id=123,
+        guild_name="KCBN",
+        options={
+            "channels": {
+                "100": {
+                    "name": "general",
+                    "kind": "text_channel",
+                    "parent_channel_id": None,
+                    "enabled": False,
+                    "allow_posting": True,
+                    "include_in_api": True,
+                }
+            }
+        },
+    )
+
+    assert state.channels[100].enabled is False
+    assert state.channels[100].posting_enabled is False
+    assert state.channels[100].api_enabled is False

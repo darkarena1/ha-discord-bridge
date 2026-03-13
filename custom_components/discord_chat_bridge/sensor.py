@@ -17,6 +17,8 @@ async def async_setup_entry(
     runtime: DiscordBridgeRuntimeData = hass.data[DOMAIN][entry.entry_id]
     entities: list[SensorEntity] = []
     for channel_state in runtime.guild_state.channels.values():
+        if not channel_state.enabled:
+            continue
         entities.append(DiscordLastMessageSensor(runtime, channel_state))
         entities.append(DiscordLastMessageAtSensor(runtime, channel_state))
     async_add_entities(entities)

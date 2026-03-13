@@ -127,6 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
             data=updated_data,
             options=merged_options,
         )
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -135,3 +136,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfig
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     hass.data[DOMAIN].pop(entry.entry_id, None)
     return True
+
+
+async def async_reload_entry(
+    hass: HomeAssistant,
+    entry: DiscordChatBridgeConfigEntry,
+) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
@@ -25,6 +26,64 @@ from .discord_api import (
     DiscordInvalidAuthError,
     async_validate_discord_credentials,
 )
+
+FORM_ENABLED_CHANNELS = "enabled_channels"
+FORM_POSTING_CHANNELS = "posting_channels"
+FORM_API_CHANNELS = "api_channels"
+
+
+def _channel_label(
+    channel_id: str,
+    channel_data: dict,
+    channel_map: dict[str, dict],
+) -> str:
+    prefix = "#"
+    if channel_data.get("kind") == "thread":
+        prefix = "Thread"
+
+    label = f"{prefix} {channel_data.get('name', channel_id)}"
+    parent_channel_id = channel_data.get("parent_channel_id")
+    if parent_channel_id is not None:
+        parent = channel_map.get(str(parent_channel_id))
+        if parent is not None:
+            label = f"{label} ({parent.get('name', parent_channel_id)})"
+    return label
+
+
+def _channel_selector_options(channel_map: dict[str, dict]) -> list[selector.SelectOptionDict]:
+    def sort_key(item: tuple[str, dict]) -> tuple[int, str]:
+        channel_id, channel_data = item
+        return (int(channel_data.get("position", 0)), channel_data.get("name", channel_id))
+
+    return [
+        selector.SelectOptionDict(
+            value=channel_id,
+            label=_channel_label(channel_id, channel_data, channel_map),
+        )
+        for channel_id, channel_data in sorted(channel_map.items(), key=sort_key)
+    ]
+
+
+def _merge_channel_flag_updates(
+    channel_map: dict[str, dict],
+    *,
+    enabled_channels: list[str],
+    posting_channels: list[str],
+    api_channels: list[str],
+) -> dict[str, dict]:
+    enabled_ids = set(enabled_channels)
+    posting_ids = set(posting_channels) & enabled_ids
+    api_ids = set(api_channels) & enabled_ids
+
+    return {
+        channel_id: {
+            **channel_data,
+            "enabled": channel_id in enabled_ids,
+            "allow_posting": channel_id in posting_ids,
+            "include_in_api": channel_id in api_ids,
+        }
+        for channel_id, channel_data in channel_map.items()
+    }
 
 
 class DiscordChatBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -86,16 +145,26 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
+        channel_map = self.config_entry.options.get(OPTION_CHANNELS, {})
+
         if user_input is not None:
             return self.async_create_entry(
                 title="",
                 data={
-                    **self.config_entry.options,
-                    OPTION_CHANNELS: self.config_entry.options.get(OPTION_CHANNELS, {}),
-                    **user_input,
+                    OPTION_CHANNELS: _merge_channel_flag_updates(
+                        channel_map,
+                        enabled_channels=user_input[FORM_ENABLED_CHANNELS],
+                        posting_channels=user_input[FORM_POSTING_CHANNELS],
+                        api_channels=user_input[FORM_API_CHANNELS],
+                    ),
+                    OPTION_RECENT_MESSAGE_LIMIT: user_input[OPTION_RECENT_MESSAGE_LIMIT],
+                    OPTION_INCLUDE_ARCHIVED_THREADS: user_input[
+                        OPTION_INCLUDE_ARCHIVED_THREADS
+                    ],
                 },
             )
 
+        channel_options = _channel_selector_options(channel_map)
         schema = vol.Schema(
             {
                 vol.Required(
@@ -109,6 +178,48 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                     OPTION_INCLUDE_ARCHIVED_THREADS,
                     default=self.config_entry.options.get(OPTION_INCLUDE_ARCHIVED_THREADS, False),
                 ): bool,
+                vol.Required(
+                    FORM_ENABLED_CHANNELS,
+                    default=[
+                        channel_id
+                        for channel_id, channel_data in channel_map.items()
+                        if channel_data.get("enabled", False)
+                    ],
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=channel_options,
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Required(
+                    FORM_POSTING_CHANNELS,
+                    default=[
+                        channel_id
+                        for channel_id, channel_data in channel_map.items()
+                        if channel_data.get("allow_posting", False)
+                    ],
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=channel_options,
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Required(
+                    FORM_API_CHANNELS,
+                    default=[
+                        channel_id
+                        for channel_id, channel_data in channel_map.items()
+                        if channel_data.get("include_in_api", False)
+                    ],
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=channel_options,
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

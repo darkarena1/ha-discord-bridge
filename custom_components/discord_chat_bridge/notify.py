@@ -27,6 +27,7 @@ async def async_setup_entry(
         [
             DiscordNotifyEntity(runtime, channel_state)
             for channel_state in runtime.guild_state.channels.values()
+            if channel_state.enabled
         ]
     )
 

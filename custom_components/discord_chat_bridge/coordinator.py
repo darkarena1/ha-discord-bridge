@@ -60,18 +60,18 @@ def build_guild_state(
     guild_name: str,
     options: dict,
 ) -> GuildState:
-    channels = {
-        int(channel_id): ChannelState(
+    channels: dict[int, ChannelState] = {}
+    for channel_id, channel_data in options.get(OPTION_CHANNELS, {}).items():
+        enabled = bool(channel_data.get("enabled", False))
+        channels[int(channel_id)] = ChannelState(
             channel_id=int(channel_id),
             name=channel_data["name"],
             kind=channel_data["kind"],
             parent_channel_id=channel_data.get("parent_channel_id"),
-            enabled=bool(channel_data.get("enabled", False)),
-            posting_enabled=bool(channel_data.get("allow_posting", False)),
-            api_enabled=bool(channel_data.get("include_in_api", False)),
+            enabled=enabled,
+            posting_enabled=enabled and bool(channel_data.get("allow_posting", False)),
+            api_enabled=enabled and bool(channel_data.get("include_in_api", False)),
         )
-        for channel_id, channel_data in options.get(OPTION_CHANNELS, {}).items()
-    }
 
     return GuildState(
         guild_id=guild_id,
