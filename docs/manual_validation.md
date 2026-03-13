@@ -33,6 +33,7 @@ For each enabled channel, verify these entities exist:
 
 - `binary_sensor.<channel>_active`
 - `sensor.<channel>_last_message`
+- `sensor.<channel>_last_message_author`
 - `sensor.<channel>_last_message_at`
 - `text.<channel>_draft`
 - `button.<channel>_send_draft`
@@ -42,10 +43,15 @@ For each enabled channel, verify these entities exist:
 
 1. Send a Discord message in an enabled channel.
 2. Confirm the last-message sensor and timestamp update.
-3. Post from Home Assistant through:
+3. Confirm attachment-only messages do not replace the text summary entities.
+4. Restart Home Assistant and confirm the last text message is preloaded back into:
+   - `sensor.<channel>_last_message`
+   - `sensor.<channel>_last_message_author`
+   - `sensor.<channel>_last_message_at`
+5. Post from Home Assistant through:
    - the draft text + send button
    - the notify entity
-4. Confirm the message appears in Discord and cache counts increase.
+6. Confirm the message appears in Discord and cache counts increase.
 
 ## Archive Validation
 

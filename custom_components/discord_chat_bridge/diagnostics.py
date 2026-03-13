@@ -61,6 +61,7 @@ async def async_get_config_entry_diagnostics(
                     "posting_enabled": channel_state.posting_enabled,
                     "api_enabled": channel_state.api_enabled,
                     "last_message_preview": channel_state.last_message_preview,
+                    "last_message_author": channel_state.last_message_author,
                     "last_message_at": (
                         channel_state.last_message_at.isoformat()
                         if channel_state.last_message_at is not None

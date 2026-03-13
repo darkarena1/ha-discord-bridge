@@ -20,6 +20,7 @@ async def async_setup_entry(
         if not channel_state.enabled:
             continue
         entities.append(DiscordLastMessageSensor(runtime, channel_state))
+        entities.append(DiscordLastMessageAuthorSensor(runtime, channel_state))
         entities.append(DiscordLastMessageAtSensor(runtime, channel_state))
     async_add_entities(entities)
 
@@ -40,6 +41,24 @@ class DiscordLastMessageSensor(DiscordChatBridgeEntity, SensorEntity):
     @property
     def native_value(self) -> str | None:
         return self.channel_state.last_message_preview
+
+
+class DiscordLastMessageAuthorSensor(DiscordChatBridgeEntity, SensorEntity):
+    _attr_should_poll = False
+
+    def __init__(
+        self, runtime: DiscordBridgeRuntimeData, channel_state
+    ) -> None:
+        super().__init__(
+            runtime,
+            channel_state,
+            unique_suffix="last_message_author",
+            entity_name="last message author",
+        )
+
+    @property
+    def native_value(self) -> str | None:
+        return self.channel_state.last_message_author
 
 
 class DiscordLastMessageAtSensor(DiscordChatBridgeEntity, SensorEntity):

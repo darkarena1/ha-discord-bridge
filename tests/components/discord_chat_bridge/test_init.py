@@ -256,6 +256,94 @@ async def test_async_setup_entry_bootstraps_runtime_and_platforms(
 
 
 @pytest.mark.asyncio
+async def test_async_setup_entry_preloads_last_text_message_for_enabled_channels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = FakeHomeAssistant()
+    entry = FakeEntry(
+        options={
+            "channels": {
+                "100": {
+                    "name": "briefing",
+                    "kind": "text_channel",
+                    "enabled": True,
+                    "allow_posting": False,
+                    "include_in_api": True,
+                }
+            },
+            OPTION_RECENT_MESSAGE_LIMIT: 5,
+        }
+    )
+    bootstrap = DiscordGuildBootstrap(
+        guild_id=1234,
+        guild_name="KCBN",
+        bot_user_id=42,
+        bot_username="KillBot",
+    )
+    discovered_channels = [
+        DiscordChannelDescription(
+            channel_id=100,
+            name="briefing",
+            kind="text_channel",
+            position=1,
+        )
+    ]
+    fake_registry = FakeEntityRegistry([])
+    fetch_channel_messages = AsyncMock(
+        return_value=[
+            {
+                "message_id": 2,
+                "channel_id": 100,
+                "author_name": "Uploader",
+                "content": "",
+                "created_at": "2026-03-13T12:01:00+00:00",
+                "attachments": ({"id": "1"},),
+            },
+            {
+                "message_id": 1,
+                "channel_id": 100,
+                "author_name": "Storyteller",
+                "content": "Opening scene",
+                "created_at": "2026-03-13T12:00:00+00:00",
+                "attachments": (),
+            },
+        ]
+    )
+
+    monkeypatch.setattr(integration, "async_get_clientsession", lambda hass: object())
+    monkeypatch.setattr(
+        integration,
+        "async_validate_discord_credentials",
+        AsyncMock(return_value=bootstrap),
+    )
+    monkeypatch.setattr(
+        integration,
+        "async_fetch_discoverable_channels",
+        AsyncMock(return_value=discovered_channels),
+    )
+    monkeypatch.setattr(
+        integration,
+        "async_fetch_channel_messages",
+        fetch_channel_messages,
+    )
+    monkeypatch.setattr(
+        integration,
+        "async_start_gateway",
+        AsyncMock(return_value=object()),
+    )
+    monkeypatch.setattr(er, "async_get", lambda hass: fake_registry)
+    monkeypatch.setattr(er, "async_entries_for_config_entry", lambda registry, entry_id: [])
+
+    assert await integration.async_setup_entry(hass, entry) is True
+
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    fetch_channel_messages.assert_awaited_once()
+    assert runtime.guild_state.channels[100].last_message_preview == "Opening scene"
+    assert runtime.guild_state.channels[100].last_message_author == "Storyteller"
+    assert runtime.guild_state.channels[100].last_message_at is not None
+
+
+@pytest.mark.asyncio
 async def test_async_setup_entry_raises_auth_failed_for_invalid_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -713,6 +801,10 @@ def test_async_cleanup_stale_entities_removes_disabled_channel_entities(
                 unique_id="1234_200_last_message",
             ),
             FakeRegistryEntry(
+                entity_id="sensor.disabled_channel_last_message_author",
+                unique_id="1234_200_last_message_author",
+            ),
+            FakeRegistryEntry(
                 entity_id="text.disabled_channel_draft",
                 unique_id="1234_200_draft",
             ),
@@ -735,5 +827,6 @@ def test_async_cleanup_stale_entities_removes_disabled_channel_entities(
 
     assert fake_registry.removed == [
         "sensor.disabled_channel_last_message",
+        "sensor.disabled_channel_last_message_author",
         "text.disabled_channel_draft",
     ]

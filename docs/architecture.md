@@ -63,6 +63,8 @@ Per enabled channel, plan to create:
   - `on` when active
 - `sensor.<channel_slug>_last_message`
   - last message preview
+- `sensor.<channel_slug>_last_message_author`
+  - author of the last text-bearing message
 - `sensor.<channel_slug>_last_message_at`
   - timestamp of the most recent message
 - `text.<channel_slug>_draft`
@@ -155,12 +157,17 @@ Current behavior:
 - Home Assistant entities read latest-message state from the in-memory cache
 - the external API serves recent messages and pins from cache when possible and falls back to Discord REST when needed
 - gateway updates currently apply to already-discovered channels and threads
+- startup preloads a recent-message batch for enabled channels so entity summaries are available immediately after restart
 - channel and thread lifecycle events trigger rediscovery refreshes
 - configured threads are preserved if they disappear from active discovery after archiving
 - recent-message cache counts and pinned-message cache metadata are exposed on entities
 - API callers can bypass cached reads with `refresh=true`
 - Home Assistant services can manually refresh discovery, recent messages, and pins
 - stale entities are removed from the entity registry when channels are disabled
+
+Entity summary behavior:
+- `last_message`, `last_message_author`, and `last_message_at` track the latest text-bearing message only
+- attachment-only or otherwise empty-content messages remain available through the API/cache layer but do not overwrite entity summary state
 
 Initial implementation note:
 - channel and active-thread discovery is persisted in config entry options first

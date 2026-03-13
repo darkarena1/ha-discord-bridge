@@ -60,6 +60,7 @@ async def test_async_get_config_entry_diagnostics_redacts_secrets_and_reports_ru
                     posting_enabled=True,
                     api_enabled=True,
                     last_message_preview="hello",
+                    last_message_author="Storyteller",
                     last_message_at=datetime(2026, 3, 13, 12, 0, tzinfo=UTC),
                     recent_messages=[{"message_id": 1}],
                     pinned_messages=[{"message_id": 2}],
@@ -90,3 +91,4 @@ async def test_async_get_config_entry_diagnostics_redacts_secrets_and_reports_ru
     assert diagnostics["runtime"]["discovery_refresh_pending"] is False
     assert diagnostics["runtime"]["discovered_channels"][0]["category_name"] == "Story"
     assert diagnostics["runtime"]["guild_state"]["100"]["recent_message_cache_count"] == 1
+    assert diagnostics["runtime"]["guild_state"]["100"]["last_message_author"] == "Storyteller"

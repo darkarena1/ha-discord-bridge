@@ -54,6 +54,7 @@ PLATFORMS = ["binary_sensor", "sensor", "text", "button", "notify"]
 ENTITY_UNIQUE_SUFFIXES = (
     "active",
     "last_message",
+    "last_message_author",
     "last_message_at",
     "draft",
     "send_draft",
@@ -175,6 +176,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
         guild_name=bootstrap.guild_name,
         options=merged_options,
     )
+    await async_preload_recent_message_state(
+        session=session,
+        entry=entry,
+        guild_state=guild_state,
+    )
 
     runtime = DiscordBridgeRuntimeData(
         entry_id=entry.entry_id,
@@ -249,6 +255,38 @@ def _make_refresh_discovery_handler(
             await async_schedule_discovery_refresh(hass, entry, runtime, immediate=True)
 
     return _handler
+
+
+async def async_preload_recent_message_state(
+    *,
+    session,
+    entry: DiscordChatBridgeConfigEntry,
+    guild_state: GuildState,
+) -> None:
+    limit = _resolve_recent_message_limit(
+        None,
+        entry.entry_id,
+        override=entry.options.get(OPTION_RECENT_MESSAGE_LIMIT),
+        entry=entry,
+    )
+    for channel_id, channel_state in guild_state.channels.items():
+        if not channel_state.enabled:
+            continue
+        try:
+            messages = await async_fetch_channel_messages(
+                session=session,
+                bot_token=entry.data[CONF_BOT_TOKEN],
+                channel_id=channel_id,
+                limit=limit,
+            )
+        except (DiscordCannotConnectError, DiscordGuildAccessError):
+            continue
+        cache_recent_messages(
+            guild_state,
+            channel_id,
+            messages,
+            limit=limit,
+        )
 
 
 def _make_refresh_recent_messages_handler(
@@ -366,15 +404,19 @@ def _matching_refresh_targets(
 
 
 def _resolve_recent_message_limit(
-    hass: HomeAssistant,
+    hass: HomeAssistant | None,
     entry_id: str,
     *,
     override: object | None,
+    entry: DiscordChatBridgeConfigEntry | None = None,
 ) -> int:
     if isinstance(override, int):
         return max(1, min(override, MAX_RECENT_MESSAGE_LIMIT))
 
-    entry = hass.config_entries.async_get_entry(entry_id)
+    if entry is None:
+        if hass is None:
+            return DEFAULT_RECENT_MESSAGE_LIMIT
+        entry = hass.config_entries.async_get_entry(entry_id)
     if entry is None:
         return DEFAULT_RECENT_MESSAGE_LIMIT
 

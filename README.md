@@ -21,8 +21,9 @@ Implemented:
 - text-channel and active-thread discovery
 - category-aware options flow with searchable channel selection
 - per-channel enablement, posting, and API exposure flags
-- channel entities for active status, latest message, timestamp, draft, send-draft, and notify
+- channel entities for active status, latest message, latest message author, timestamp, draft, send-draft, and notify
 - live Discord gateway updates for enabled channels
+- startup preload of recent messages for enabled channels so entity summaries are populated immediately
 - authenticated bridge API endpoints for health, channels, channel detail, messages, pins, and posting
 - in-memory message and pin caching with `refresh=true` cache bypass
 - diagnostics export for config entry and runtime state
@@ -216,6 +217,7 @@ Use this checklist in a real Home Assistant instance with your Discord bot:
 3. Verify these entities appear:
    - `binary_sensor.<channel>_active`
    - `sensor.<channel>_last_message`
+   - `sensor.<channel>_last_message_author`
    - `sensor.<channel>_last_message_at`
    - `text.<channel>_draft`
    - `button.<channel>_send_draft`
@@ -244,4 +246,5 @@ Use this checklist in a real Home Assistant instance with your Discord bot:
 - If you later want native Assist/LLM tool support inside Home Assistant too, that can be added on top.
 - Local secrets belong in `.env`, not in committed files.
 - The Discord bot should have the Message Content intent enabled if you want live message previews.
+- Entity summaries ignore attachment-only and non-text messages. `last_message`, `last_message_author`, and `last_message_at` track the latest text-bearing message instead.
 - `manifest.json` currently assumes the eventual GitHub repo path will be `darkarena1/ha-discord-bridge`. Update those URLs if you publish elsewhere.

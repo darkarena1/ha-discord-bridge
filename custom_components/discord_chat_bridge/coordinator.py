@@ -28,6 +28,7 @@ class ChannelState:
     archived: bool = False
     enabled: bool = False
     last_message_preview: str | None = None
+    last_message_author: str | None = None
     last_message_at: datetime | None = None
     posting_enabled: bool = False
     api_enabled: bool = False
@@ -133,10 +134,11 @@ def apply_message_summary(guild_state: GuildState, message: dict) -> None:
         return
 
     content = (message.get("content") or "").strip()
-    if not content and message.get("attachments"):
-        content = "<attachment only>"
+    if not content:
+        return
 
-    channel.last_message_preview = content or "<no text>"
+    channel.last_message_preview = content
+    channel.last_message_author = _message_author_name(message)
     channel.last_message_at = dt_util.parse_datetime(message["created_at"])
 
 
@@ -161,7 +163,7 @@ def cache_recent_messages(
         reverse=True,
     )
     channel.recent_messages = ordered_messages[:limit]
-    apply_message_summary(guild_state, channel.recent_messages[0])
+    apply_recent_message_summary(guild_state, channel_id)
 
 
 def cache_recent_message(
@@ -188,6 +190,28 @@ def get_cached_recent_messages(
     if channel is None or len(channel.recent_messages) < limit:
         return None
     return channel.recent_messages[:limit]
+
+
+def apply_recent_message_summary(guild_state: GuildState, channel_id: int) -> None:
+    channel = guild_state.channels.get(channel_id)
+    if channel is None:
+        return
+
+    latest_text_message = next(
+        (
+            message
+            for message in channel.recent_messages
+            if (message.get("content") or "").strip()
+        ),
+        None,
+    )
+    if latest_text_message is None:
+        channel.last_message_preview = None
+        channel.last_message_author = None
+        channel.last_message_at = None
+        return
+
+    apply_message_summary(guild_state, latest_text_message)
 
 
 def cache_pinned_messages(
@@ -245,3 +269,11 @@ def _message_sort_key(message: dict[str, Any]) -> tuple[datetime, str]:
     if parsed is None:
         parsed = datetime.min.replace(tzinfo=dt_util.UTC)
     return parsed, _message_cache_key(message)
+
+
+def _message_author_name(message: dict[str, Any]) -> str | None:
+    author_name = message.get("author_name")
+    if not isinstance(author_name, str):
+        return None
+    normalized = author_name.strip()
+    return normalized or None
