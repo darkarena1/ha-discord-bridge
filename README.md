@@ -77,6 +77,26 @@ By default:
 http://127.0.0.1:8123
 ```
 
+## Discord Requirements
+
+Your Discord application should have:
+
+- a bot user created in the Discord Developer Portal
+- the `Message Content Intent` enabled
+
+Minimum bot permissions for this integration:
+
+- `View Channels`
+- `Read Message History`
+- `Send Messages`
+
+Recommended if you want thread behavior to be reliable:
+
+- `Create Public Threads`
+- `Create Private Threads`
+- `Send Messages in Threads`
+- `Manage Webhooks` is not required for the current implementation
+
 ## Planned External API
 
 The integration is designed to expose authenticated HTTP endpoints under the Home Assistant instance, for example:
@@ -101,6 +121,37 @@ Channel metadata returned by `/api/discord_chat_bridge/channels` includes:
 - `recent_message_cache_count`
 - `pinned_message_cache_count`
 - `pinned_messages_refreshed_at`
+
+Single-channel metadata is available at:
+
+- `/api/discord_chat_bridge/channels/{channel_id}`
+
+This returns the same metadata shape as the channel list, scoped to one API-enabled channel.
+
+## Manual Validation
+
+Use this checklist in a real Home Assistant instance with your Discord bot:
+
+1. Add the integration and confirm the config entry succeeds.
+2. Open the options flow and enable one text channel and one thread.
+3. Verify these entities appear:
+   - `binary_sensor.<channel>_active`
+   - `sensor.<channel>_last_message`
+   - `sensor.<channel>_last_message_at`
+   - `text.<channel>_draft`
+   - `button.<channel>_send_draft`
+   - `notify.<channel>`
+4. Send a message in Discord and confirm the last-message sensor updates.
+5. Archive an enabled thread and confirm:
+   - `binary_sensor.<thread>_active` turns `off`
+   - posting is rejected through the API and HA entities
+6. Call the external API with your `X-API-Key` and verify:
+   - `GET /channels`
+   - `GET /channels/{channel_id}`
+   - `GET /channels/{channel_id}/messages`
+   - `GET /channels/{channel_id}/pins`
+7. Verify `refresh=true` bypasses cache for messages and pins.
+8. Create a new thread in Discord and confirm discovery refresh picks it up.
 
 ## Notes
 

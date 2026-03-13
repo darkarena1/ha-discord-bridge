@@ -28,6 +28,16 @@ For local development, the repo also provides a `.env.example` template with:
 These are developer conveniences only. Runtime configuration should live in the
 Home Assistant config entry, not in source-controlled files.
 
+### Discord bot requirements
+
+Required Discord capabilities:
+
+- `Message Content Intent`
+- `View Channels`
+- `Read Message History`
+- `Send Messages`
+- `Send Messages in Threads`
+
 ### Device model
 
 - One Home Assistant device per guild
