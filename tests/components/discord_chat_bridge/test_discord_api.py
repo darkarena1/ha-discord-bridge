@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
 from custom_components.discord_chat_bridge.discord_api import (
     DiscordGuildAccessError,
     DiscordInvalidAuthError,
+    async_fetch_channel_messages,
+    async_post_channel_message,
     async_validate_discord_credentials,
 )
 
 
 class FakeResponse:
-    def __init__(self, status: int, payload: dict) -> None:
+    def __init__(self, status: int, payload: Any) -> None:
         self.status = status
         self._payload = payload
 
@@ -30,7 +33,10 @@ class FakeSession:
     def __init__(self, responses: list[FakeResponse]) -> None:
         self._responses: Iterator[FakeResponse] = iter(responses)
 
-    def get(self, url: str, headers: dict[str, str]) -> FakeResponse:
+    def get(self, url: str, headers: dict[str, str], json=None) -> FakeResponse:
+        return next(self._responses)
+
+    def post(self, url: str, headers: dict[str, str], json=None) -> FakeResponse:
         return next(self._responses)
 
 
@@ -85,3 +91,77 @@ async def test_validate_discord_credentials_missing_guild() -> None:
             bot_token="token",
             guild_id=123,
         )
+
+
+@pytest.mark.asyncio
+async def test_fetch_channel_messages_retries_after_rate_limit(monkeypatch) -> None:
+    session = FakeSession(
+        [
+            FakeResponse(429, {"retry_after": 0}),
+            FakeResponse(
+                200,
+                [
+                    {
+                        "id": "2",
+                        "channel_id": "123",
+                        "content": "hello",
+                        "timestamp": "2026-03-13T12:01:00+00:00",
+                        "author": {"id": "99", "username": "killbot"},
+                        "attachments": [],
+                    }
+                ],
+            ),
+        ]
+    )
+    sleeps: list[float] = []
+
+    async def _sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr("custom_components.discord_chat_bridge.discord_api.asyncio.sleep", _sleep)
+
+    result = await async_fetch_channel_messages(
+        session=session,
+        bot_token="token",
+        channel_id=123,
+        limit=1,
+    )
+
+    assert sleeps == [0.0]
+    assert result[0]["message_id"] == 2
+
+
+@pytest.mark.asyncio
+async def test_post_channel_message_retries_after_server_error(monkeypatch) -> None:
+    session = FakeSession(
+        [
+            FakeResponse(502, {"message": "bad gateway"}),
+            FakeResponse(
+                200,
+                {
+                    "id": "5",
+                    "channel_id": "123",
+                    "content": "sent",
+                    "timestamp": "2026-03-13T12:01:00+00:00",
+                    "author": {"id": "99", "username": "killbot"},
+                    "attachments": [],
+                },
+            ),
+        ]
+    )
+    sleeps: list[float] = []
+
+    async def _sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr("custom_components.discord_chat_bridge.discord_api.asyncio.sleep", _sleep)
+
+    result = await async_post_channel_message(
+        session=session,
+        bot_token="token",
+        channel_id=123,
+        message="hello",
+    )
+
+    assert sleeps == [1.0]
+    assert result["message_id"] == 5

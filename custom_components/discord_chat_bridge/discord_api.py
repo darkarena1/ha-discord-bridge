@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from aiohttp import ClientError, ClientSession
 
 from .const import CHANNEL_KIND_TEXT, CHANNEL_KIND_THREAD, DISCORD_API_BASE_URL
+
+MAX_DISCORD_RETRY_ATTEMPTS = 3
+DEFAULT_DISCORD_RETRY_AFTER_SECONDS = 1.0
 
 
 class DiscordBridgeError(Exception):
@@ -68,18 +72,47 @@ async def _discord_get(
     bot_token: str,
     path: str,
 ) -> tuple[int, Any]:
+    return await _discord_request_json(
+        session=session,
+        method="GET",
+        bot_token=bot_token,
+        path=path,
+    )
+
+
+async def _discord_request_json(
+    session: ClientSession,
+    *,
+    method: str,
+    bot_token: str,
+    path: str,
+    json_body: dict[str, Any] | None = None,
+) -> tuple[int, Any]:
     url = f"{DISCORD_API_BASE_URL}{path}"
     headers = {
         "Authorization": f"Bot {bot_token}",
         "User-Agent": "HomeAssistantDiscordChatBridge/0.1.0",
     }
+    request_method = session.get if method == "GET" else session.post
 
-    try:
-        async with session.get(url, headers=headers) as response:
-            payload = await response.json(content_type=None)
-            return response.status, payload
-    except ClientError as exc:
-        raise DiscordCannotConnectError("Could not connect to Discord.") from exc
+    for attempt in range(1, MAX_DISCORD_RETRY_ATTEMPTS + 1):
+        try:
+            async with request_method(url, headers=headers, json=json_body) as response:
+                payload = await response.json(content_type=None)
+        except ClientError as exc:
+            raise DiscordCannotConnectError("Could not connect to Discord.") from exc
+
+        if response.status == 429 and attempt < MAX_DISCORD_RETRY_ATTEMPTS:
+            await asyncio.sleep(_retry_after_seconds(payload, attempt))
+            continue
+
+        if response.status >= 500 and attempt < MAX_DISCORD_RETRY_ATTEMPTS:
+            await asyncio.sleep(DEFAULT_DISCORD_RETRY_AFTER_SECONDS * attempt)
+            continue
+
+        return response.status, payload
+
+    raise DiscordCannotConnectError("Discord request retry loop exited unexpectedly.")
 
 
 async def async_validate_discord_credentials(
@@ -162,7 +195,7 @@ def _message_summary_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "author_id": int(author.get("id", 0)),
         "author_name": author_name,
         "content": payload.get("content", ""),
-        "created_at": payload.get("timestamp", datetime.utcnow().isoformat()),
+        "created_at": payload.get("timestamp", datetime.now(UTC).isoformat()),
         "jump_url": (
             f"https://discord.com/channels/"
             f"{payload.get('guild_id', '@me')}/{payload['channel_id']}/{payload['id']}"
@@ -288,24 +321,28 @@ async def async_post_channel_message(
     *,
     message: str,
 ) -> dict[str, Any]:
-    url = f"{DISCORD_API_BASE_URL}/channels/{channel_id}/messages"
-    headers = {
-        "Authorization": f"Bot {bot_token}",
-        "User-Agent": "HomeAssistantDiscordChatBridge/0.1.0",
-    }
-    body = {"content": message}
+    response_status, payload = await _discord_request_json(
+        session=session,
+        method="POST",
+        bot_token=bot_token,
+        path=f"/channels/{channel_id}/messages",
+        json_body={"content": message},
+    )
 
-    try:
-        async with session.post(url, headers=headers, json=body) as response:
-            payload = await response.json(content_type=None)
-    except ClientError as exc:
-        raise DiscordCannotConnectError("Could not connect to Discord.") from exc
-
-    if response.status in {401, 403, 404}:
+    if response_status in {401, 403, 404}:
         raise DiscordGuildAccessError(f"Bot cannot post to channel {channel_id}.")
-    if response.status >= 400:
+    if response_status >= 400:
         raise DiscordCannotConnectError("Discord rejected the send message request.")
 
     if not isinstance(payload, dict):
         raise DiscordCannotConnectError("Discord returned an unexpected send response.")
     return _message_summary_from_payload(payload)
+
+
+def _retry_after_seconds(payload: Any, attempt: int) -> float:
+    if isinstance(payload, dict):
+        retry_after = payload.get("retry_after")
+        if isinstance(retry_after, (int, float)):
+            return max(float(retry_after), 0.0)
+
+    return DEFAULT_DISCORD_RETRY_AFTER_SECONDS * attempt
