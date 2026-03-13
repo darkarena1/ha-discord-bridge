@@ -3,6 +3,7 @@ from __future__ import annotations
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     CONF_API_KEY,
@@ -10,6 +11,16 @@ from .const import (
     CONF_GUILD_ID,
     DEFAULT_RECENT_MESSAGE_LIMIT,
     DOMAIN,
+    ENTRY_DATA_BOT_USER_ID,
+    ENTRY_DATA_BOT_USERNAME,
+    ENTRY_DATA_GUILD_NAME,
+    MAX_RECENT_MESSAGE_LIMIT,
+)
+from .discord_api import (
+    DiscordCannotConnectError,
+    DiscordGuildAccessError,
+    DiscordInvalidAuthError,
+    async_validate_discord_credentials,
 )
 
 
@@ -20,13 +31,37 @@ class DiscordChatBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            await self.async_set_unique_id(str(user_input[CONF_GUILD_ID]))
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=f"Discord Guild {user_input[CONF_GUILD_ID]}",
-                data=user_input,
-                options={"recent_message_limit": DEFAULT_RECENT_MESSAGE_LIMIT},
-            )
+            session = async_get_clientsession(self.hass)
+            try:
+                bootstrap = await async_validate_discord_credentials(
+                    session=session,
+                    bot_token=user_input[CONF_BOT_TOKEN],
+                    guild_id=user_input[CONF_GUILD_ID],
+                )
+            except DiscordInvalidAuthError:
+                errors["base"] = "invalid_auth"
+            except DiscordGuildAccessError:
+                errors["base"] = "guild_not_found"
+            except DiscordCannotConnectError:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                errors["base"] = "unknown"
+            else:
+                await self.async_set_unique_id(str(bootstrap.guild_id))
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=bootstrap.guild_name,
+                    data={
+                        **user_input,
+                        ENTRY_DATA_GUILD_NAME: bootstrap.guild_name,
+                        ENTRY_DATA_BOT_USER_ID: bootstrap.bot_user_id,
+                        ENTRY_DATA_BOT_USERNAME: bootstrap.bot_username,
+                    },
+                    options={
+                        "recent_message_limit": DEFAULT_RECENT_MESSAGE_LIMIT,
+                        "include_archived_threads": False,
+                    },
+                )
 
         schema = vol.Schema(
             {
@@ -58,7 +93,7 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                         "recent_message_limit",
                         DEFAULT_RECENT_MESSAGE_LIMIT,
                     ),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_RECENT_MESSAGE_LIMIT)),
                 vol.Required(
                     "include_archived_threads",
                     default=self.config_entry.options.get("include_archived_threads", False),

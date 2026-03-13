@@ -10,6 +10,12 @@
           "api_key": "API key"
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Discord.",
+      "guild_not_found": "The bot cannot access that guild.",
+      "invalid_auth": "The Discord bot token is invalid.",
+      "unknown": "An unexpected error occurred."
     }
   },
   "options": {
