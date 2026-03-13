@@ -344,6 +344,83 @@ async def test_async_setup_entry_preloads_last_text_message_for_enabled_channels
 
 
 @pytest.mark.asyncio
+async def test_async_setup_entry_migrates_legacy_channel_flags_on_upgrade(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = FakeHomeAssistant()
+    entry = FakeEntry(
+        options={
+            "channels": {
+                "100": {
+                    "name": "briefing",
+                    "kind": "text_channel",
+                    "enabled": True,
+                },
+                "200": {
+                    "name": "legacy-disabled",
+                    "kind": "text_channel",
+                    "enabled": False,
+                    "allow_posting": True,
+                    "include_in_api": True,
+                },
+            }
+        }
+    )
+    bootstrap = DiscordGuildBootstrap(
+        guild_id=1234,
+        guild_name="KCBN",
+        bot_user_id=42,
+        bot_username="KillBot",
+    )
+    discovered_channels = [
+        DiscordChannelDescription(
+            channel_id=100,
+            name="briefing",
+            kind="text_channel",
+            position=1,
+        ),
+        DiscordChannelDescription(
+            channel_id=200,
+            name="legacy-disabled",
+            kind="text_channel",
+            position=2,
+        ),
+    ]
+    fake_registry = FakeEntityRegistry([])
+
+    monkeypatch.setattr(integration, "async_get_clientsession", lambda hass: object())
+    monkeypatch.setattr(
+        integration,
+        "async_validate_discord_credentials",
+        AsyncMock(return_value=bootstrap),
+    )
+    monkeypatch.setattr(
+        integration,
+        "async_fetch_discoverable_channels",
+        AsyncMock(return_value=discovered_channels),
+    )
+    monkeypatch.setattr(
+        integration,
+        "async_fetch_channel_messages",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        integration,
+        "async_start_gateway",
+        AsyncMock(return_value=object()),
+    )
+    monkeypatch.setattr(er, "async_get", lambda hass: fake_registry)
+    monkeypatch.setattr(er, "async_entries_for_config_entry", lambda registry, entry_id: [])
+
+    assert await integration.async_setup_entry(hass, entry) is True
+
+    assert entry.options["channels"]["100"]["allow_posting"] is True
+    assert entry.options["channels"]["100"]["include_in_api"] is True
+    assert entry.options["channels"]["200"]["allow_posting"] is False
+    assert entry.options["channels"]["200"]["include_in_api"] is False
+
+
+@pytest.mark.asyncio
 async def test_async_setup_entry_raises_auth_failed_for_invalid_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

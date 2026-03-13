@@ -3,6 +3,7 @@ from __future__ import annotations
 from custom_components.discord_chat_bridge.coordinator import (
     build_guild_state,
     merge_discovered_channel_settings,
+    normalize_channel_options,
 )
 from custom_components.discord_chat_bridge.discord_api import DiscordChannelDescription
 
@@ -79,6 +80,32 @@ def test_merge_discovered_channel_settings_defaults_enabled_channel_to_posting_a
     assert merged["channels"]["100"]["enabled"] is True
     assert merged["channels"]["100"]["allow_posting"] is True
     assert merged["channels"]["100"]["include_in_api"] is True
+
+
+def test_normalize_channel_options_migrates_legacy_channel_flags() -> None:
+    normalized = normalize_channel_options(
+        {
+            "channels": {
+                "100": {
+                    "name": "enabled-channel",
+                    "kind": "text_channel",
+                    "enabled": True,
+                },
+                "200": {
+                    "name": "disabled-channel",
+                    "kind": "text_channel",
+                    "enabled": False,
+                    "allow_posting": True,
+                    "include_in_api": True,
+                },
+            }
+        }
+    )
+
+    assert normalized["channels"]["100"]["allow_posting"] is True
+    assert normalized["channels"]["100"]["include_in_api"] is True
+    assert normalized["channels"]["200"]["allow_posting"] is False
+    assert normalized["channels"]["200"]["include_in_api"] is False
 
 
 def test_merge_discovered_channel_settings_preserves_enabled_thread_that_went_missing() -> None:

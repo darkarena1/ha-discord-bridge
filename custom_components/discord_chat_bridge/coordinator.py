@@ -48,7 +48,8 @@ def merge_discovered_channel_settings(
     existing_options: dict,
     discovered_channels: list[DiscordChannelDescription],
 ) -> dict:
-    existing_channels = existing_options.get(OPTION_CHANNELS, {})
+    normalized_options = normalize_channel_options(existing_options)
+    existing_channels = normalized_options.get(OPTION_CHANNELS, {})
     merged_channels: dict[str, dict] = {}
     discovered_ids: set[str] = set()
 
@@ -83,8 +84,31 @@ def merge_discovered_channel_settings(
         }
 
     return {
-        **existing_options,
+        **normalized_options,
         OPTION_CHANNELS: merged_channels,
+    }
+
+
+def normalize_channel_options(existing_options: dict) -> dict:
+    existing_channels = existing_options.get(OPTION_CHANNELS, {})
+    normalized_channels: dict[str, dict] = {}
+
+    for channel_id, channel_data in existing_channels.items():
+        enabled = bool(channel_data.get("enabled", False))
+        normalized_channels[channel_id] = {
+            **channel_data,
+            "enabled": enabled,
+            "allow_posting": (
+                bool(channel_data.get("allow_posting", True)) if enabled else False
+            ),
+            "include_in_api": (
+                bool(channel_data.get("include_in_api", True)) if enabled else False
+            ),
+        }
+
+    return {
+        **existing_options,
+        OPTION_CHANNELS: normalized_channels,
     }
 
 
