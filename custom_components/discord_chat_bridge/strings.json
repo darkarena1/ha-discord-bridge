@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Discord guild",
+        "description": "Enter the Discord bot token, guild id, and external API key.",
+        "data": {
+          "bot_token": "Bot token",
+          "guild_id": "Guild ID",
+          "api_key": "API key"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Discord bridge options",
+        "data": {
+          "recent_message_limit": "Default recent-message limit",
+          "include_archived_threads": "Include archived threads"
+        }
+      }
+    }
+  }
+}

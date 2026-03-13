@@ -1,0 +1,15 @@
+post_message:
+  fields:
+    channel_id:
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box
+    message:
+      required: true
+      selector:
+        text:
+
+refresh_channels:
+  fields: {}

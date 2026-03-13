@@ -1,0 +1,5 @@
+homeassistant
+discord.py>=2.7.1
+pytest
+pytest-asyncio
+ruff
