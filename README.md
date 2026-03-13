@@ -14,19 +14,21 @@ Custom Home Assistant integration that connects to Discord as a bot application 
 
 ## Current Status
 
-Project scaffold and development environment are in place.
+The integration is functional end to end.
 
-Implemented so far:
-- repository structure for a Home Assistant custom integration
+Implemented:
 - Discord credential validation and guild bootstrap
-- channel and active-thread discovery with per-channel options
-- authenticated bridge API endpoints for channels, messages, pins, and posting
-- channel entities for active status, latest message, draft, send-draft, and notify
-- live Discord gateway updates for message events on enabled channels
-- discovery refresh support for newly created channels and threads
-- configured threads remain tracked if they later become archived
-- architecture and API design docs
-- local Home Assistant config directory
+- text-channel and active-thread discovery
+- category-aware options flow with searchable channel selection
+- per-channel enablement, posting, and API exposure flags
+- channel entities for active status, latest message, timestamp, draft, send-draft, and notify
+- live Discord gateway updates for enabled channels
+- authenticated bridge API endpoints for health, channels, channel detail, messages, pins, and posting
+- in-memory message and pin caching with `refresh=true` cache bypass
+- diagnostics export for config entry and runtime state
+- manual refresh services for discovery, recent messages, and pins
+- stale entity cleanup when channels are disabled
+- local Home Assistant config directory trimmed for lower-noise development
 
 ## Repository Layout
 
@@ -97,17 +99,46 @@ Recommended if you want thread behavior to be reliable:
 - `Send Messages in Threads`
 - `Manage Webhooks` is not required for the current implementation
 
-## Planned External API
+## Operator Workflow
 
-The integration is designed to expose authenticated HTTP endpoints under the Home Assistant instance, for example:
+1. Add the `Discord Chat Bridge` integration in Home Assistant.
+2. Enter:
+   - Discord bot token
+   - Discord guild ID
+   - bridge API key
+3. Open the integration options flow.
+4. Filter by category or channel kind if needed.
+5. Enable only the channels or threads you want managed.
+6. In the second step, choose which enabled channels:
+   - allow posting
+   - are exposed through the external API
+7. Save options and verify the entities created for those channels.
+
+Notes:
+- all discovered channels start disabled
+- posting and API access are only configurable for enabled channels
+- threads are labeled as `parent / thread` in the selector
+
+## External API
+
+The integration exposes authenticated HTTP endpoints under your Home Assistant base URL:
 
 - `/api/discord_chat_bridge/channels`
 - `/api/discord_chat_bridge/channels/{channel_id}`
 - `/api/discord_chat_bridge/channels/{channel_id}/messages`
 - `/api/discord_chat_bridge/channels/{channel_id}/pins`
 - `/api/discord_chat_bridge/channels/{channel_id}/messages` `POST`
+- `/api/discord_chat_bridge/health`
 
-These will be callable through your Home Assistant external URL once implemented.
+Use the `X-API-Key` header with the bridge API key stored in the config entry.
+
+Example:
+
+```bash
+curl \
+  -H 'X-API-Key: your_bridge_api_key' \
+  'https://your-home-assistant-url/api/discord_chat_bridge/channels'
+```
 
 ### Cache Control
 
@@ -128,6 +159,32 @@ Single-channel metadata is available at:
 
 This returns the same metadata shape as the channel list, scoped to one API-enabled channel.
 
+## Home Assistant Services
+
+The integration also registers manual refresh services:
+
+- `discord_chat_bridge.refresh_discovery`
+- `discord_chat_bridge.refresh_recent_messages`
+- `discord_chat_bridge.refresh_pins`
+
+Supported fields:
+- `guild_id`: optional Discord guild ID string
+- `channel_id`: optional Discord channel ID string for channel-scoped refresh
+- `limit`: optional message limit for `refresh_recent_messages`
+
+These only operate on channels already enabled in the integration.
+
+## Diagnostics
+
+Home Assistant diagnostics for the config entry include:
+- redacted config-entry data and options
+- gateway task state
+- discovery refresh task state
+- discovered channel metadata
+- per-channel runtime flags and cache counts
+
+Use this before debugging API or gateway issues.
+
 ## Manual Validation
 
 Use this checklist in a real Home Assistant instance with your Discord bot:
@@ -146,12 +203,18 @@ Use this checklist in a real Home Assistant instance with your Discord bot:
    - `binary_sensor.<thread>_active` turns `off`
    - posting is rejected through the API and HA entities
 6. Call the external API with your `X-API-Key` and verify:
+   - `GET /health`
    - `GET /channels`
    - `GET /channels/{channel_id}`
    - `GET /channels/{channel_id}/messages`
    - `GET /channels/{channel_id}/pins`
+   - `POST /channels/{channel_id}/messages` for a posting-enabled channel
 7. Verify `refresh=true` bypasses cache for messages and pins.
-8. Create a new thread in Discord and confirm discovery refresh picks it up.
+8. Call Home Assistant services and verify cache refresh works:
+   - `discord_chat_bridge.refresh_discovery`
+   - `discord_chat_bridge.refresh_recent_messages`
+   - `discord_chat_bridge.refresh_pins`
+9. Create a new thread in Discord and confirm discovery refresh picks it up.
 
 ## Notes
 

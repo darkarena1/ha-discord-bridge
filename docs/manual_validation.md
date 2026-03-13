@@ -23,6 +23,9 @@ Confirm the Discord bot has:
 4. Open the options flow and enable at least:
    - one text channel
    - one thread
+5. In the second options step:
+   - allow posting for one enabled channel
+   - enable API access for the channels you want externally visible
 
 ## Entity Validation
 
@@ -69,3 +72,39 @@ Then verify cache bypass:
 
 - `GET /api/discord_chat_bridge/channels/{channel_id}/messages?refresh=true`
 - `GET /api/discord_chat_bridge/channels/{channel_id}/pins?refresh=true`
+
+## Service Validation
+
+In Home Assistant developer tools, call:
+
+- `discord_chat_bridge.refresh_discovery`
+- `discord_chat_bridge.refresh_recent_messages`
+- `discord_chat_bridge.refresh_pins`
+
+Validate:
+
+1. `refresh_discovery` picks up a newly created thread or channel.
+2. `refresh_recent_messages` updates:
+   - `sensor.<channel>_last_message`
+   - `sensor.<channel>_last_message_at`
+   - `recent_message_cache_count`
+3. `refresh_pins` updates:
+   - `pinned_message_cache_count`
+   - `pinned_messages_refreshed_at`
+
+Optional targeted calls:
+
+- `guild_id`: refresh only one guild
+- `channel_id`: refresh only one enabled channel
+- `limit`: override the recent-message fetch size for `refresh_recent_messages`
+
+## Diagnostics Validation
+
+Download the Home Assistant diagnostics bundle for the config entry and confirm it includes:
+
+- redacted `bot_token`
+- redacted `api_key`
+- guild metadata
+- discovered channel metadata
+- per-channel enabled, posting, and API flags
+- recent and pinned cache counts

@@ -98,6 +98,12 @@ Recommended default:
 
 This gives a conservative and reviewable security posture.
 
+Current options-flow behavior:
+- step 1 filters the discovered list by category, kind, and selected-state
+- step 2 chooses the enabled channels
+- step 3 chooses posting and API exposure only from the enabled set
+- thread labels are shown as `parent / thread`
+
 ## Retrieval Limits
 
 Recommended default recent-message limit: `20`
@@ -147,14 +153,14 @@ Current runtime:
 
 Current behavior:
 - Home Assistant entities read latest-message state from the in-memory cache
-- the external API still reads messages and pins directly from Discord REST
+- the external API serves recent messages and pins from cache when possible and falls back to Discord REST when needed
 - gateway updates currently apply to already-discovered channels and threads
 - channel and thread lifecycle events trigger rediscovery refreshes
 - configured threads are preserved if they disappear from active discovery after archiving
 - recent-message cache counts and pinned-message cache metadata are exposed on entities
 - API callers can bypass cached reads with `refresh=true`
-
-Planned additions:
+- Home Assistant services can manually refresh discovery, recent messages, and pins
+- stale entities are removed from the entity registry when channels are disabled
 
 Initial implementation note:
 - channel and active-thread discovery is persisted in config entry options first
@@ -162,11 +168,25 @@ Initial implementation note:
 
 ## Options Flow
 
-The options flow should manage:
+The options flow manages:
 - channel enablement
 - posting enablement
 - API exposure enablement
 - recent-message default limit
+- category-aware filtering for large guilds
+
+## Diagnostics
+
+The integration exposes Home Assistant diagnostics for each config entry.
+
+Diagnostics include:
+- redacted entry data and options
+- gateway and discovery task state
+- discovered channel metadata
+- per-channel runtime flags
+- message and pin cache counts
+
+This is the primary support surface for runtime inspection without exposing secrets.
 
 ## Initial Roadmap
 
