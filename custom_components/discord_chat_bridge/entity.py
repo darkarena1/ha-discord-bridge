@@ -56,6 +56,13 @@ class DiscordChatBridgeEntity(Entity):
             "channel_kind": self.channel_state.kind,
             "parent_channel_id": self.channel_state.parent_channel_id,
             "archived": self.channel_state.archived,
+            "recent_message_cache_count": len(self.channel_state.recent_messages),
+            "pinned_message_cache_count": len(self.channel_state.pinned_messages),
+            "pinned_messages_refreshed_at": (
+                self.channel_state.pinned_messages_refreshed_at.isoformat()
+                if self.channel_state.pinned_messages_refreshed_at is not None
+                else None
+            ),
         }
 
     async def async_added_to_hass(self) -> None:

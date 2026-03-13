@@ -88,6 +88,19 @@ The integration is designed to expose authenticated HTTP endpoints under the Hom
 
 These will be callable through your Home Assistant external URL once implemented.
 
+### Cache Control
+
+Read endpoints support `refresh=true` to bypass cache and force a Discord fetch:
+
+- `/api/discord_chat_bridge/channels/{channel_id}/messages?limit=20&refresh=true`
+- `/api/discord_chat_bridge/channels/{channel_id}/pins?refresh=true`
+
+Channel metadata returned by `/api/discord_chat_bridge/channels` includes:
+
+- `recent_message_cache_count`
+- `pinned_message_cache_count`
+- `pinned_messages_refreshed_at`
+
 ## Notes
 
 - This design is intentionally independent of the Home Assistant OpenAI integration.

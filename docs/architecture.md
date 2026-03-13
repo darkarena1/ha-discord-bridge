@@ -139,10 +139,10 @@ Current behavior:
 - gateway updates currently apply to already-discovered channels and threads
 - channel and thread lifecycle events trigger rediscovery refreshes
 - configured threads are preserved if they disappear from active discovery after archiving
+- recent-message cache counts and pinned-message cache metadata are exposed on entities
+- API callers can bypass cached reads with `refresh=true`
 
 Planned additions:
-- recent-message ring buffer
-- pinned-message snapshot
 
 Initial implementation note:
 - channel and active-thread discovery is persisted in config entry options first

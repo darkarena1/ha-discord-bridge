@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from custom_components.discord_chat_bridge.coordinator import ChannelState, GuildState
 from custom_components.discord_chat_bridge.entity import DiscordChatBridgeEntity
@@ -21,6 +22,9 @@ def test_entity_marks_archived_thread_unavailable_and_exposes_attributes() -> No
         kind="thread",
         parent_channel_id=50,
         archived=True,
+        recent_messages=[{"message_id": 1}, {"message_id": 2}],
+        pinned_messages=[{"message_id": 10}],
+        pinned_messages_refreshed_at=datetime(2026, 3, 13, 12, 0, tzinfo=UTC),
     )
     entity = DiscordChatBridgeEntity(
         FakeRuntime(
@@ -40,4 +44,7 @@ def test_entity_marks_archived_thread_unavailable_and_exposes_attributes() -> No
         "channel_kind": "thread",
         "parent_channel_id": 50,
         "archived": True,
+        "recent_message_cache_count": 2,
+        "pinned_message_cache_count": 1,
+        "pinned_messages_refreshed_at": "2026-03-13T12:00:00+00:00",
     }
