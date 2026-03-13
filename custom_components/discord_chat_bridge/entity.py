@@ -45,6 +45,19 @@ class DiscordChatBridgeEntity(Entity):
         )
         self._attr_translation_key = None
 
+    @property
+    def available(self) -> bool:
+        return not self.channel_state.archived
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        return {
+            "channel_id": self.channel_state.channel_id,
+            "channel_kind": self.channel_state.kind,
+            "parent_channel_id": self.channel_state.parent_channel_id,
+            "archived": self.channel_state.archived,
+        }
+
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(
             async_dispatcher_connect(

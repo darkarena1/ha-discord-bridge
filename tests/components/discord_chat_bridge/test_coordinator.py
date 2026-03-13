@@ -102,6 +102,7 @@ def test_build_guild_state_reads_channel_flags() -> None:
                     "name": "general",
                     "kind": "text_channel",
                     "parent_channel_id": None,
+                    "archived": False,
                     "enabled": True,
                     "allow_posting": True,
                     "include_in_api": True,
@@ -113,6 +114,7 @@ def test_build_guild_state_reads_channel_flags() -> None:
     assert state.guild_id == 123
     assert state.guild_name == "KCBN"
     assert state.channels[100].enabled is True
+    assert state.channels[100].archived is False
     assert state.channels[100].posting_enabled is True
     assert state.channels[100].api_enabled is True
 
@@ -127,6 +129,7 @@ def test_build_guild_state_disables_posting_and_api_for_disabled_channels() -> N
                     "name": "general",
                     "kind": "text_channel",
                     "parent_channel_id": None,
+                    "archived": False,
                     "enabled": False,
                     "allow_posting": True,
                     "include_in_api": True,

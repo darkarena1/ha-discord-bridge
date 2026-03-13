@@ -16,6 +16,7 @@ class ChannelState:
     name: str
     kind: str
     parent_channel_id: int | None = None
+    archived: bool = False
     enabled: bool = False
     last_message_preview: str | None = None
     last_message_at: datetime | None = None
@@ -95,6 +96,7 @@ def build_guild_state(
             name=channel_data["name"],
             kind=channel_data["kind"],
             parent_channel_id=channel_data.get("parent_channel_id"),
+            archived=bool(channel_data.get("archived", False)),
             enabled=enabled,
             posting_enabled=enabled and bool(channel_data.get("allow_posting", False)),
             api_enabled=enabled and bool(channel_data.get("include_in_api", False)),

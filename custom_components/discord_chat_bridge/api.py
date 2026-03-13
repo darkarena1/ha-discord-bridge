@@ -46,6 +46,7 @@ def _serialize_channel(runtime: Any, channel_state: Any) -> dict[str, Any]:
         "name": channel_state.name,
         "kind": channel_state.kind,
         "parent_channel_id": channel_state.parent_channel_id,
+        "archived": channel_state.archived,
         "enabled": channel_state.enabled,
         "allow_posting": channel_state.posting_enabled,
         "include_in_api": channel_state.api_enabled,
@@ -240,6 +241,11 @@ class DiscordBridgeChannelMessagesView(DiscordBridgeBaseView):
         if not channel_state.posting_enabled:
             return self.json_message(
                 "Posting is disabled for this channel.",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
+        if channel_state.archived:
+            return self.json_message(
+                "Archived threads are read-only.",
                 status_code=HTTPStatus.FORBIDDEN,
             )
 

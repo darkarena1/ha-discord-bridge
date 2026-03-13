@@ -46,6 +46,9 @@ class DiscordNotifyEntity(DiscordChatBridgeEntity, NotifyEntity):
         )
 
     async def async_send_message(self, message: str, title: str | None = None) -> None:
+        if self.channel_state.archived:
+            raise RuntimeError("Archived threads are read-only.")
+
         content = f"{title}\n{message}" if title else message
         session = async_get_clientsession(self.hass)
         try:

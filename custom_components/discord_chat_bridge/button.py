@@ -47,6 +47,9 @@ class DiscordSendDraftButton(DiscordChatBridgeEntity, ButtonEntity):
         )
 
     async def async_press(self) -> None:
+        if self.channel_state.archived:
+            raise HomeAssistantError("Archived threads are read-only.")
+
         message = self.runtime.drafts.get(self.channel_state.channel_id, "").strip()
         if not message:
             raise HomeAssistantError("Draft is empty.")

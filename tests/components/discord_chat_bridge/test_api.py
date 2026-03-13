@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from custom_components.discord_chat_bridge.api import (
     _matching_runtimes_for_api_key,
     _runtime_for_channel,
+    _serialize_channel,
 )
 from custom_components.discord_chat_bridge.coordinator import ChannelState, GuildState
 
@@ -64,3 +65,26 @@ def test_runtime_for_channel_returns_matching_runtime() -> None:
     result = _runtime_for_channel(hass, "key-a", 100)
 
     assert result is runtime
+
+
+def test_serialize_channel_includes_archived_flag() -> None:
+    runtime = FakeRuntime(
+        guild_id=1,
+        guild_name="A",
+        api_key="key-a",
+        guild_state=GuildState(guild_id=1),
+    )
+    channel_state = ChannelState(
+        channel_id=100,
+        name="ops-thread",
+        kind="thread",
+        parent_channel_id=50,
+        archived=True,
+        enabled=True,
+        api_enabled=True,
+    )
+
+    result = _serialize_channel(runtime, channel_state)
+
+    assert result["archived"] is True
+    assert result["parent_channel_id"] == 50
