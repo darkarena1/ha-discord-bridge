@@ -44,6 +44,17 @@ def _runtime_for_channel(hass: HomeAssistant, api_key: str, channel_id: int) -> 
     return None
 
 
+def _runtime_for_enabled_channel(hass: HomeAssistant, channel_id: int) -> Any | None:
+    runtimes = hass.data.get(DOMAIN, {}).values()
+    for runtime in runtimes:
+        if not hasattr(runtime, "guild_state"):
+            continue
+        channel_state = runtime.guild_state.channels.get(channel_id)
+        if channel_state is not None and channel_state.enabled:
+            return runtime
+    return None
+
+
 def _serialize_channel(runtime: Any, channel_state: Any) -> dict[str, Any]:
     return {
         "guild_id": runtime.guild_id,
@@ -389,9 +400,197 @@ class DiscordBridgePinnedMessagesView(DiscordBridgeBaseView):
         return self.json(messages)
 
 
+class DiscordBridgeFrontendBaseView(http.HomeAssistantView):
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self.hass = hass
+
+    def _runtime_for_enabled_channel(
+        self,
+        channel_id: int,
+    ) -> Any | web.Response:
+        runtime = _runtime_for_enabled_channel(self.hass, channel_id)
+        if runtime is None:
+            return self.json_message(
+                "Enabled channel not found.",
+                status_code=HTTPStatus.NOT_FOUND,
+            )
+        return runtime
+
+
+class DiscordBridgeFrontendChannelsView(DiscordBridgeFrontendBaseView):
+    url = "/api/discord_chat_bridge/frontend/channels"
+    name = "api:discord_chat_bridge:frontend_channels"
+
+    async def get(self, request: web.Request) -> web.Response:
+        channels: list[dict[str, Any]] = []
+        for runtime in self.hass.data.get(DOMAIN, {}).values():
+            if not hasattr(runtime, "guild_state"):
+                continue
+            for channel_state in runtime.guild_state.channels.values():
+                if not channel_state.enabled:
+                    continue
+                channels.append(_serialize_channel(runtime, channel_state))
+
+        channels.sort(key=lambda item: (item["guild_name"], item["kind"], item["name"]))
+        return self.json(channels)
+
+
+class DiscordBridgeFrontendChannelDetailView(DiscordBridgeFrontendBaseView):
+    url = "/api/discord_chat_bridge/frontend/channels/{channel_id}"
+    name = "api:discord_chat_bridge:frontend_channel_detail"
+
+    async def get(self, request: web.Request, channel_id: str) -> web.Response:
+        try:
+            parsed_channel_id = int(channel_id)
+        except ValueError:
+            return self.json_message("Invalid channel id.", status_code=HTTPStatus.BAD_REQUEST)
+
+        runtime = self._runtime_for_enabled_channel(parsed_channel_id)
+        if isinstance(runtime, web.Response):
+            return runtime
+
+        return self.json(
+            _serialize_channel(runtime, runtime.guild_state.channels[parsed_channel_id])
+        )
+
+
+class DiscordBridgeFrontendChannelMessagesView(DiscordBridgeFrontendBaseView):
+    url = "/api/discord_chat_bridge/frontend/channels/{channel_id}/messages"
+    name = "api:discord_chat_bridge:frontend_channel_messages"
+
+    async def get(self, request: web.Request, channel_id: str) -> web.Response:
+        try:
+            parsed_channel_id = int(channel_id)
+        except ValueError:
+            return self.json_message("Invalid channel id.", status_code=HTTPStatus.BAD_REQUEST)
+
+        runtime = self._runtime_for_enabled_channel(parsed_channel_id)
+        if isinstance(runtime, web.Response):
+            return runtime
+
+        limit = request.query.get("limit")
+        if limit is None:
+            limit_value = 20
+        else:
+            try:
+                limit_value = max(1, min(int(limit), 50))
+            except ValueError:
+                return self.json_message(
+                    "Invalid limit.",
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+
+        if not _should_refresh(request):
+            cached_messages = get_cached_recent_messages(
+                runtime.guild_state,
+                parsed_channel_id,
+                limit=limit_value,
+            )
+            if cached_messages is not None:
+                return self.json(cached_messages)
+
+        session = async_get_clientsession(self.hass)
+        try:
+            messages = await async_fetch_channel_messages(
+                session=session,
+                bot_token=runtime.entry_data[CONF_BOT_TOKEN],
+                channel_id=parsed_channel_id,
+                limit=limit_value,
+            )
+        except DiscordGuildAccessError:
+            return self.json_message(
+                "Bot cannot access that channel.",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
+        except DiscordCannotConnectError:
+            return self.json_message(
+                "Failed to reach Discord.",
+                status_code=HTTPStatus.BAD_GATEWAY,
+            )
+
+        if messages:
+            cache_recent_messages(
+                runtime.guild_state,
+                parsed_channel_id,
+                messages,
+            )
+            async_dispatcher_send(
+                self.hass,
+                channel_state_signal(runtime.entry_id, parsed_channel_id),
+            )
+
+        return self.json(messages)
+
+    async def post(self, request: web.Request, channel_id: str) -> web.Response:
+        try:
+            parsed_channel_id = int(channel_id)
+        except ValueError:
+            return self.json_message("Invalid channel id.", status_code=HTTPStatus.BAD_REQUEST)
+
+        runtime = self._runtime_for_enabled_channel(parsed_channel_id)
+        if isinstance(runtime, web.Response):
+            return runtime
+
+        channel_state = runtime.guild_state.channels[parsed_channel_id]
+        if not channel_state.posting_enabled:
+            return self.json_message(
+                "Posting is disabled for this channel.",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
+        if channel_state.archived:
+            return self.json_message(
+                "Archived threads are read-only.",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
+
+        try:
+            payload = await request.json()
+        except ValueError:
+            return self.json_message("Invalid JSON body.", status_code=HTTPStatus.BAD_REQUEST)
+
+        message = payload.get("message") if isinstance(payload, dict) else None
+        if not isinstance(message, str) or not message.strip():
+            return self.json_message(
+                "Body must include a non-empty 'message' field.",
+                status_code=HTTPStatus.BAD_REQUEST,
+            )
+
+        session = async_get_clientsession(self.hass)
+        try:
+            sent_message = await async_post_channel_message(
+                session=session,
+                bot_token=runtime.entry_data[CONF_BOT_TOKEN],
+                channel_id=parsed_channel_id,
+                message=message,
+            )
+        except DiscordGuildAccessError:
+            return self.json_message(
+                "Bot cannot post to that channel.",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
+        except DiscordCannotConnectError:
+            return self.json_message(
+                "Failed to reach Discord.",
+                status_code=HTTPStatus.BAD_GATEWAY,
+            )
+
+        cache_recent_message(runtime.guild_state, sent_message)
+        async_dispatcher_send(
+            self.hass,
+            channel_state_signal(runtime.entry_id, parsed_channel_id),
+        )
+
+        return self.json(sent_message, status_code=HTTPStatus.CREATED)
+
+
 def async_register_views(hass: HomeAssistant) -> None:
     hass.http.register_view(DiscordBridgeHealthView(hass))
     hass.http.register_view(DiscordBridgeChannelsView(hass))
     hass.http.register_view(DiscordBridgeChannelDetailView(hass))
     hass.http.register_view(DiscordBridgeChannelMessagesView(hass))
     hass.http.register_view(DiscordBridgePinnedMessagesView(hass))
+    hass.http.register_view(DiscordBridgeFrontendChannelsView(hass))
+    hass.http.register_view(DiscordBridgeFrontendChannelDetailView(hass))
+    hass.http.register_view(DiscordBridgeFrontendChannelMessagesView(hass))

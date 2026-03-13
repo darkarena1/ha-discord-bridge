@@ -9,6 +9,9 @@ from aiohttp.test_utils import make_mocked_request
 from custom_components.discord_chat_bridge.api import (
     DiscordBridgeChannelDetailView,
     DiscordBridgeChannelMessagesView,
+    DiscordBridgeFrontendChannelDetailView,
+    DiscordBridgeFrontendChannelMessagesView,
+    DiscordBridgeFrontendChannelsView,
     DiscordBridgePinnedMessagesView,
     _matching_runtimes_for_api_key,
     _runtime_for_channel,
@@ -220,6 +223,80 @@ async def test_channel_detail_view_rejects_non_api_channel() -> None:
     assert response.status == 403
 
 
+async def test_frontend_channels_view_returns_enabled_channels_without_api_key() -> None:
+    runtime = FakeRuntime(
+        entry_id="entry-1",
+        guild_id=1,
+        guild_name="A",
+        api_key="key-a",
+        entry_data={CONF_BOT_TOKEN: "token-a"},
+        guild_state=GuildState(
+            guild_id=1,
+            channels={
+                100: ChannelState(
+                    channel_id=100,
+                    name="general",
+                    kind="text_channel",
+                    enabled=True,
+                    api_enabled=False,
+                ),
+                200: ChannelState(
+                    channel_id=200,
+                    name="hidden",
+                    kind="text_channel",
+                    enabled=False,
+                    api_enabled=True,
+                ),
+            },
+        ),
+    )
+    hass = FakeHass({"entry-1": runtime})
+    view = DiscordBridgeFrontendChannelsView(hass)
+    request = make_mocked_request("GET", "/api/discord_chat_bridge/frontend/channels")
+
+    response = await view.get(request)
+
+    assert response.status == 200
+    assert json.loads(response.text) == _json_shape(
+        [_serialize_channel(runtime, runtime.guild_state.channels[100])]
+    )
+
+
+async def test_frontend_channel_detail_view_returns_enabled_channel_payload() -> None:
+    runtime = FakeRuntime(
+        entry_id="entry-1",
+        guild_id=1,
+        guild_name="A",
+        api_key="key-a",
+        entry_data={CONF_BOT_TOKEN: "token-a"},
+        guild_state=GuildState(
+            guild_id=1,
+            channels={
+                100: ChannelState(
+                    channel_id=100,
+                    name="general",
+                    kind="text_channel",
+                    enabled=True,
+                    api_enabled=False,
+                )
+            },
+        ),
+    )
+    hass = FakeHass({"entry-1": runtime})
+    view = DiscordBridgeFrontendChannelDetailView(hass)
+    request = make_mocked_request(
+        "GET",
+        "/api/discord_chat_bridge/frontend/channels/100",
+    )
+
+    response = await view.get(request, "100")
+
+    assert response.status == 200
+    assert json.loads(response.text) == _json_shape(
+        _serialize_channel(runtime, runtime.guild_state.channels[100])
+    )
+
+
 async def test_channel_messages_view_uses_cache_when_not_forced(monkeypatch) -> None:
     runtime = FakeRuntime(
         entry_id="entry-1",
@@ -277,6 +354,43 @@ async def test_channel_messages_view_uses_cache_when_not_forced(monkeypatch) -> 
     assert json.loads(response.text) == _json_shape(
         runtime.guild_state.channels[100].recent_messages
     )
+
+
+async def test_frontend_channel_messages_view_rejects_read_only_posts() -> None:
+    runtime = FakeRuntime(
+        entry_id="entry-1",
+        guild_id=1,
+        guild_name="A",
+        api_key="key-a",
+        entry_data={CONF_BOT_TOKEN: "token-a"},
+        guild_state=GuildState(
+            guild_id=1,
+            channels={
+                100: ChannelState(
+                    channel_id=100,
+                    name="general",
+                    kind="text_channel",
+                    enabled=True,
+                    posting_enabled=False,
+                )
+            },
+        ),
+    )
+    hass = FakeHass({"entry-1": runtime})
+    view = DiscordBridgeFrontendChannelMessagesView(hass)
+    request = make_mocked_request(
+        "POST",
+        "/api/discord_chat_bridge/frontend/channels/100/messages",
+    )
+
+    async def _json():
+        return {"message": "hello"}
+
+    request.json = _json  # type: ignore[method-assign]
+
+    response = await view.post(request, "100")
+
+    assert response.status == 403
 
 
 async def test_channel_messages_view_refresh_bypasses_cache(monkeypatch) -> None:
