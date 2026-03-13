@@ -37,6 +37,7 @@ def test_posting_switch_reports_channel_posting_state() -> None:
 
     assert switch.available is True
     assert switch.entity_category is EntityCategory.CONFIG
+    assert switch.icon == "mdi:message-text"
     assert switch.is_on is False
 
 
@@ -59,4 +60,5 @@ def test_api_switch_reports_channel_api_state() -> None:
 
     assert switch.available is True
     assert switch.entity_category is EntityCategory.CONFIG
+    assert switch.icon == "mdi:api"
     assert switch.is_on is True

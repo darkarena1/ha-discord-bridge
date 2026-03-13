@@ -46,6 +46,7 @@ class DiscordPostingEnabledSwitch(DiscordChannelCapabilitySwitch):
             unique_suffix="posting_enabled",
             entity_name="posting enabled",
         )
+        self._attr_icon = "mdi:message-text"
 
     @property
     def is_on(self) -> bool:
@@ -78,6 +79,7 @@ class DiscordApiEnabledSwitch(DiscordChannelCapabilitySwitch):
             unique_suffix="api_enabled",
             entity_name="api enabled",
         )
+        self._attr_icon = "mdi:api"
 
     @property
     def is_on(self) -> bool:
