@@ -125,23 +125,28 @@ Authorization rules:
 
 Discord is primarily push-based.
 
-Planned runtime:
+Current runtime:
 - maintain one long-lived Discord client per config entry
 - subscribe to message events
 - cache:
   - guild metadata
   - channel metadata
   - latest message summary
-  - recent-message ring buffer
-  - pinned-message snapshot
 
-Home Assistant entities read from cache.
-External API reads from the same cache and optionally refreshes from Discord when needed.
+Current behavior:
+- Home Assistant entities read latest-message state from the in-memory cache
+- the external API still reads messages and pins directly from Discord REST
+- gateway updates currently apply to already-discovered channels and threads
+
+Planned additions:
+- recent-message ring buffer
+- pinned-message snapshot
+- dynamic channel/thread discovery from gateway events
 
 Initial implementation note:
 - channel and active-thread discovery is persisted in config entry options first
 - archived-thread discovery can remain optional behind the existing option flag
-- the gateway-backed live cache will build on top of the discovered channel map
+- the gateway-backed live cache builds on top of the discovered channel map
 
 ## Options Flow
 

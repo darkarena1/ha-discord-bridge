@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -27,12 +27,13 @@ from .discord_api import (
     async_fetch_discoverable_channels,
     async_validate_discord_credentials,
 )
+from .gateway import DiscordGatewayHandle, async_start_gateway, async_stop_gateway
 
 type DiscordChatBridgeConfigEntry = ConfigEntry
 PLATFORMS = ["sensor", "text", "button", "notify"]
 
 
-@dataclass(frozen=True)
+@dataclass
 class DiscordBridgeRuntimeData:
     entry_id: str
     guild_id: int
@@ -43,7 +44,8 @@ class DiscordBridgeRuntimeData:
     entry_data: dict
     guild_state: GuildState
     discovered_channels: tuple[DiscordChannelDescription, ...]
-    drafts: dict[int, str]
+    drafts: dict[int, str] = field(default_factory=dict)
+    gateway_handle: DiscordGatewayHandle | None = None
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -106,7 +108,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
         entry_data=entry.data,
         guild_state=guild_state,
         discovered_channels=tuple(discovered_channels),
-        drafts={},
     )
     hass.data[DOMAIN][entry.entry_id] = runtime
 
@@ -127,12 +128,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
             data=updated_data,
             options=merged_options,
         )
+    runtime.gateway_handle = await async_start_gateway(hass, runtime)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigEntry) -> bool:
+    runtime = hass.data[DOMAIN].get(entry.entry_id)
+    if runtime is not None and runtime.gateway_handle is not None:
+        await async_stop_gateway(runtime.gateway_handle)
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     hass.data[DOMAIN].pop(entry.entry_id, None)
     return True

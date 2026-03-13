@@ -18,8 +18,11 @@ Project scaffold and development environment are in place.
 
 Implemented so far:
 - repository structure for a Home Assistant custom integration
-- initial config flow skeleton
-- initial manifest and component files
+- Discord credential validation and guild bootstrap
+- channel and active-thread discovery with per-channel options
+- authenticated bridge API endpoints for channels, messages, pins, and posting
+- channel entities for latest message, draft, send-draft, and notify
+- live Discord gateway updates for message events on enabled channels
 - architecture and API design docs
 - local Home Assistant config directory
 
@@ -88,3 +91,4 @@ These will be callable through your Home Assistant external URL once implemented
 - This design is intentionally independent of the Home Assistant OpenAI integration.
 - If you later want native Assist/LLM tool support inside Home Assistant too, that can be added on top.
 - Local secrets belong in `.env`, not in committed files.
+- The Discord bot should have the Message Content intent enabled if you want live message previews.
