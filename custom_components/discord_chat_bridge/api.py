@@ -174,6 +174,30 @@ class DiscordBridgeChannelsView(DiscordBridgeBaseView):
         return self.json(channels)
 
 
+class DiscordBridgeChannelDetailView(DiscordBridgeBaseView):
+    url = "/api/discord_chat_bridge/channels/{channel_id}"
+    name = "api:discord_chat_bridge:channel_detail"
+
+    async def get(self, request: web.Request, channel_id: str) -> web.Response:
+        try:
+            parsed_channel_id = int(channel_id)
+        except ValueError:
+            return self.json_message("Invalid channel id.", status_code=HTTPStatus.BAD_REQUEST)
+
+        runtime = self._authorized_runtime_for_channel(request, parsed_channel_id)
+        if isinstance(runtime, web.Response):
+            return runtime
+
+        channel_state = runtime.guild_state.channels[parsed_channel_id]
+        if not channel_state.api_enabled:
+            return self.json_message(
+                "Channel is not enabled for API access.",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
+
+        return self.json(_serialize_channel(runtime, channel_state))
+
+
 class DiscordBridgeChannelMessagesView(DiscordBridgeBaseView):
     url = "/api/discord_chat_bridge/channels/{channel_id}/messages"
     name = "api:discord_chat_bridge:channel_messages"
@@ -364,5 +388,6 @@ class DiscordBridgePinnedMessagesView(DiscordBridgeBaseView):
 def async_register_views(hass: HomeAssistant) -> None:
     hass.http.register_view(DiscordBridgeHealthView(hass))
     hass.http.register_view(DiscordBridgeChannelsView(hass))
+    hass.http.register_view(DiscordBridgeChannelDetailView(hass))
     hass.http.register_view(DiscordBridgeChannelMessagesView(hass))
     hass.http.register_view(DiscordBridgePinnedMessagesView(hass))

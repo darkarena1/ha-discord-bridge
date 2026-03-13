@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from aiohttp.test_utils import make_mocked_request
 
 from custom_components.discord_chat_bridge.api import (
+    DiscordBridgeChannelDetailView,
     DiscordBridgeChannelMessagesView,
     DiscordBridgePinnedMessagesView,
     _matching_runtimes_for_api_key,
@@ -147,6 +148,74 @@ def test_should_refresh_parses_truthy_values() -> None:
 
 def _json_shape(value):
     return json.loads(json.dumps(value))
+
+
+async def test_channel_detail_view_returns_single_channel_payload() -> None:
+    runtime = FakeRuntime(
+        entry_id="entry-1",
+        guild_id=1,
+        guild_name="A",
+        api_key="key-a",
+        entry_data={CONF_BOT_TOKEN: "token-a"},
+        guild_state=GuildState(
+            guild_id=1,
+            channels={
+                100: ChannelState(
+                    channel_id=100,
+                    name="general",
+                    kind="text_channel",
+                    api_enabled=True,
+                    recent_messages=[{"message_id": 1}],
+                )
+            },
+        ),
+    )
+    hass = FakeHass({"entry-1": runtime})
+    view = DiscordBridgeChannelDetailView(hass)
+    request = make_mocked_request(
+        "GET",
+        "/api/discord_chat_bridge/channels/100",
+        headers={"X-API-Key": "key-a"},
+    )
+
+    response = await view.get(request, "100")
+
+    assert response.status == 200
+    assert json.loads(response.text) == _json_shape(
+        _serialize_channel(runtime, runtime.guild_state.channels[100])
+    )
+
+
+async def test_channel_detail_view_rejects_non_api_channel() -> None:
+    runtime = FakeRuntime(
+        entry_id="entry-1",
+        guild_id=1,
+        guild_name="A",
+        api_key="key-a",
+        entry_data={CONF_BOT_TOKEN: "token-a"},
+        guild_state=GuildState(
+            guild_id=1,
+            channels={
+                100: ChannelState(
+                    channel_id=100,
+                    name="general",
+                    kind="text_channel",
+                    api_enabled=False,
+                )
+            },
+        ),
+    )
+    hass = FakeHass({"entry-1": runtime})
+    view = DiscordBridgeChannelDetailView(hass)
+    request = make_mocked_request(
+        "GET",
+        "/api/discord_chat_bridge/channels/100",
+        headers={"X-API-Key": "key-a"},
+    )
+
+    response = await view.get(request, "100")
+
+    assert response.status == 403
 
 
 async def test_channel_messages_view_uses_cache_when_not_forced(monkeypatch) -> None:

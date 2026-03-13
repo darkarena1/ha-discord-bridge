@@ -82,6 +82,7 @@ http://127.0.0.1:8123
 The integration is designed to expose authenticated HTTP endpoints under the Home Assistant instance, for example:
 
 - `/api/discord_chat_bridge/channels`
+- `/api/discord_chat_bridge/channels/{channel_id}`
 - `/api/discord_chat_bridge/channels/{channel_id}/messages`
 - `/api/discord_chat_bridge/channels/{channel_id}/pins`
 - `/api/discord_chat_bridge/channels/{channel_id}/messages` `POST`
