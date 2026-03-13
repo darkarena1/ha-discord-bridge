@@ -138,6 +138,11 @@ Planned runtime:
 Home Assistant entities read from cache.
 External API reads from the same cache and optionally refreshes from Discord when needed.
 
+Initial implementation note:
+- channel and active-thread discovery is persisted in config entry options first
+- archived-thread discovery can remain optional behind the existing option flag
+- the gateway-backed live cache will build on top of the discovered channel map
+
 ## Options Flow
 
 The options flow should manage:

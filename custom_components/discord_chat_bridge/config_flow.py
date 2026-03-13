@@ -15,6 +15,9 @@ from .const import (
     ENTRY_DATA_BOT_USERNAME,
     ENTRY_DATA_GUILD_NAME,
     MAX_RECENT_MESSAGE_LIMIT,
+    OPTION_CHANNELS,
+    OPTION_INCLUDE_ARCHIVED_THREADS,
+    OPTION_RECENT_MESSAGE_LIMIT,
 )
 from .discord_api import (
     DiscordCannotConnectError,
@@ -58,8 +61,9 @@ class DiscordChatBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         ENTRY_DATA_BOT_USERNAME: bootstrap.bot_username,
                     },
                     options={
-                        "recent_message_limit": DEFAULT_RECENT_MESSAGE_LIMIT,
-                        "include_archived_threads": False,
+                        OPTION_CHANNELS: {},
+                        OPTION_RECENT_MESSAGE_LIMIT: DEFAULT_RECENT_MESSAGE_LIMIT,
+                        OPTION_INCLUDE_ARCHIVED_THREADS: False,
                     },
                 )
 
@@ -83,20 +87,27 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            return self.async_create_entry(
+                title="",
+                data={
+                    **self.config_entry.options,
+                    OPTION_CHANNELS: self.config_entry.options.get(OPTION_CHANNELS, {}),
+                    **user_input,
+                },
+            )
 
         schema = vol.Schema(
             {
                 vol.Required(
-                    "recent_message_limit",
+                    OPTION_RECENT_MESSAGE_LIMIT,
                     default=self.config_entry.options.get(
-                        "recent_message_limit",
+                        OPTION_RECENT_MESSAGE_LIMIT,
                         DEFAULT_RECENT_MESSAGE_LIMIT,
                     ),
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_RECENT_MESSAGE_LIMIT)),
                 vol.Required(
-                    "include_archived_threads",
-                    default=self.config_entry.options.get("include_archived_threads", False),
+                    OPTION_INCLUDE_ARCHIVED_THREADS,
+                    default=self.config_entry.options.get(OPTION_INCLUDE_ARCHIVED_THREADS, False),
                 ): bool,
             }
         )

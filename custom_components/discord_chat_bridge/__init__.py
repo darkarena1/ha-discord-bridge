@@ -15,11 +15,15 @@ from .const import (
     ENTRY_DATA_BOT_USER_ID,
     ENTRY_DATA_BOT_USERNAME,
     ENTRY_DATA_GUILD_NAME,
+    OPTION_INCLUDE_ARCHIVED_THREADS,
 )
+from .coordinator import GuildState, build_guild_state, merge_discovered_channel_settings
 from .discord_api import (
     DiscordCannotConnectError,
+    DiscordChannelDescription,
     DiscordGuildAccessError,
     DiscordInvalidAuthError,
+    async_fetch_discoverable_channels,
     async_validate_discord_credentials,
 )
 
@@ -33,6 +37,8 @@ class DiscordBridgeRuntimeData:
     bot_user_id: int
     bot_username: str
     api_key: str
+    guild_state: GuildState
+    discovered_channels: tuple[DiscordChannelDescription, ...]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -57,25 +63,59 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
     except DiscordCannotConnectError as exc:
         raise ConfigEntryNotReady("Could not connect to Discord during setup.") from exc
 
+    include_archived_threads = bool(
+        entry.options.get(OPTION_INCLUDE_ARCHIVED_THREADS, False)
+    )
+
+    try:
+        discovered_channels = await async_fetch_discoverable_channels(
+            session=session,
+            bot_token=entry.data[CONF_BOT_TOKEN],
+            guild_id=entry.data[CONF_GUILD_ID],
+            include_archived_threads=include_archived_threads,
+        )
+    except DiscordGuildAccessError as exc:
+        raise ConfigEntryAuthFailed(
+            "Discord guild channels are not accessible to this bot."
+        ) from exc
+    except DiscordCannotConnectError as exc:
+        raise ConfigEntryNotReady("Could not discover Discord channels during setup.") from exc
+
+    merged_options = merge_discovered_channel_settings(entry.options, discovered_channels)
+    guild_state = build_guild_state(
+        guild_id=bootstrap.guild_id,
+        guild_name=bootstrap.guild_name,
+        options=merged_options,
+    )
+
     runtime = DiscordBridgeRuntimeData(
         guild_id=bootstrap.guild_id,
         guild_name=bootstrap.guild_name,
         bot_user_id=bootstrap.bot_user_id,
         bot_username=bootstrap.bot_username,
         api_key=entry.data[CONF_API_KEY],
+        guild_state=guild_state,
+        discovered_channels=tuple(discovered_channels),
     )
     hass.data[DOMAIN][entry.entry_id] = runtime
 
-    hass.config_entries.async_update_entry(
-        entry,
-        title=bootstrap.guild_name,
-        data={
-            **entry.data,
-            ENTRY_DATA_GUILD_NAME: bootstrap.guild_name,
-            ENTRY_DATA_BOT_USER_ID: bootstrap.bot_user_id,
-            ENTRY_DATA_BOT_USERNAME: bootstrap.bot_username,
-        },
-    )
+    updated_data = {
+        **entry.data,
+        ENTRY_DATA_GUILD_NAME: bootstrap.guild_name,
+        ENTRY_DATA_BOT_USER_ID: bootstrap.bot_user_id,
+        ENTRY_DATA_BOT_USERNAME: bootstrap.bot_username,
+    }
+    if (
+        entry.title != bootstrap.guild_name
+        or entry.data != updated_data
+        or entry.options != merged_options
+    ):
+        hass.config_entries.async_update_entry(
+            entry,
+            title=bootstrap.guild_name,
+            data=updated_data,
+            options=merged_options,
+        )
     return True
 
 
