@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .api import async_register_views
 from .const import (
     CONF_API_KEY,
     CONF_BOT_TOKEN,
@@ -37,12 +38,16 @@ class DiscordBridgeRuntimeData:
     bot_user_id: int
     bot_username: str
     api_key: str
+    entry_data: dict
     guild_state: GuildState
     discovered_channels: tuple[DiscordChannelDescription, ...]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     hass.data.setdefault(DOMAIN, {})
+    if not hass.data[DOMAIN].get("_views_registered"):
+        async_register_views(hass)
+        hass.data[DOMAIN]["_views_registered"] = True
     return True
 
 
@@ -94,6 +99,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
         bot_user_id=bootstrap.bot_user_id,
         bot_username=bootstrap.bot_username,
         api_key=entry.data[CONF_API_KEY],
+        entry_data=entry.data,
         guild_state=guild_state,
         discovered_channels=tuple(discovered_channels),
     )

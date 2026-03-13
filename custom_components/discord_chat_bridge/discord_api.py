@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from aiohttp import ClientError, ClientSession
@@ -40,6 +41,18 @@ class DiscordChannelDescription:
     position: int
     parent_channel_id: int | None = None
     archived: bool = False
+
+
+@dataclass(frozen=True)
+class DiscordMessageSummary:
+    message_id: int
+    channel_id: int
+    author_id: int
+    author_name: str
+    content: str
+    created_at: str
+    jump_url: str
+    attachments: tuple[dict[str, str | None], ...]
 
 
 def _bot_display_name(payload: dict[str, Any]) -> str:
@@ -129,6 +142,35 @@ def _channel_from_payload(payload: dict[str, Any]) -> DiscordChannelDescription 
     )
 
 
+def _message_summary_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    attachments = tuple(
+        {
+            "id": str(attachment.get("id", "")),
+            "filename": attachment.get("filename"),
+            "url": attachment.get("url"),
+            "content_type": attachment.get("content_type"),
+        }
+        for attachment in payload.get("attachments", [])
+        if isinstance(attachment, dict)
+    )
+    author = payload.get("author", {})
+    author_name = author.get("global_name") or author.get("username", "Unknown")
+
+    return {
+        "message_id": int(payload["id"]),
+        "channel_id": int(payload["channel_id"]),
+        "author_id": int(author.get("id", 0)),
+        "author_name": author_name,
+        "content": payload.get("content", ""),
+        "created_at": payload.get("timestamp", datetime.utcnow().isoformat()),
+        "jump_url": (
+            f"https://discord.com/channels/"
+            f"{payload.get('guild_id', '@me')}/{payload['channel_id']}/{payload['id']}"
+        ),
+        "attachments": attachments,
+    }
+
+
 async def async_fetch_discoverable_channels(
     session: ClientSession,
     bot_token: str,
@@ -189,3 +231,87 @@ async def async_fetch_discoverable_channels(
         discovered.values(),
         key=lambda item: (item.kind != CHANNEL_KIND_TEXT, item.position, item.name.lower()),
     )
+
+
+async def async_fetch_channel_messages(
+    session: ClientSession,
+    bot_token: str,
+    channel_id: int,
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    status, payload = await _discord_get(
+        session,
+        bot_token,
+        f"/channels/{channel_id}/messages?limit={limit}",
+    )
+    if status in {401, 403, 404}:
+        raise DiscordGuildAccessError(f"Bot cannot access channel {channel_id}.")
+    if status >= 400:
+        raise DiscordCannotConnectError("Discord rejected the channel messages request.")
+
+    if not isinstance(payload, list):
+        return []
+
+    messages = [
+        _message_summary_from_payload(message)
+        for message in payload
+        if isinstance(message, dict)
+    ]
+    messages.reverse()
+    return messages
+
+
+async def async_fetch_pinned_messages(
+    session: ClientSession,
+    bot_token: str,
+    channel_id: int,
+) -> list[dict[str, Any]]:
+    status, payload = await _discord_get(
+        session,
+        bot_token,
+        f"/channels/{channel_id}/pins",
+    )
+    if status in {401, 403, 404}:
+        raise DiscordGuildAccessError(f"Bot cannot access channel {channel_id}.")
+    if status >= 400:
+        raise DiscordCannotConnectError("Discord rejected the pinned messages request.")
+
+    if not isinstance(payload, list):
+        return []
+
+    return [
+        _message_summary_from_payload(message)
+        for message in payload
+        if isinstance(message, dict)
+    ]
+
+
+async def async_post_channel_message(
+    session: ClientSession,
+    bot_token: str,
+    channel_id: int,
+    *,
+    message: str,
+) -> dict[str, Any]:
+    url = f"{DISCORD_API_BASE_URL}/channels/{channel_id}/messages"
+    headers = {
+        "Authorization": f"Bot {bot_token}",
+        "User-Agent": "HomeAssistantDiscordChatBridge/0.1.0",
+    }
+    body = {"content": message}
+
+    try:
+        async with session.post(url, headers=headers, json=body) as response:
+            payload = await response.json(content_type=None)
+    except ClientError as exc:
+        raise DiscordCannotConnectError("Could not connect to Discord.") from exc
+
+    if response.status in {401, 403, 404}:
+        raise DiscordGuildAccessError(f"Bot cannot post to channel {channel_id}.")
+    if response.status >= 400:
+        raise DiscordCannotConnectError("Discord rejected the send message request.")
+
+    if not isinstance(payload, dict):
+        raise DiscordCannotConnectError("Discord returned an unexpected send response.")
+    return _message_summary_from_payload(payload)
