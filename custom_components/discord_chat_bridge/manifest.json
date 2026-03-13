@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/darkarena1/ha-discord-bridge/issues",
   "loggers": ["discord"],
   "requirements": ["discord.py>=2.7.1"],
-  "version": "0.3.0"
+  "version": "0.4.0"
 }
