@@ -285,7 +285,6 @@ async def async_fetch_channel_messages(
         for message in payload
         if isinstance(message, dict)
     ]
-    messages.reverse()
     return messages
 
 

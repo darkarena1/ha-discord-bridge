@@ -132,6 +132,44 @@ async def test_fetch_channel_messages_retries_after_rate_limit(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_fetch_channel_messages_preserves_newest_first_order() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(
+                200,
+                [
+                    {
+                        "id": "20",
+                        "channel_id": "123",
+                        "content": "newest",
+                        "timestamp": "2026-03-13T12:02:00+00:00",
+                        "author": {"id": "99", "username": "killbot"},
+                        "attachments": [],
+                    },
+                    {
+                        "id": "10",
+                        "channel_id": "123",
+                        "content": "older",
+                        "timestamp": "2026-03-13T12:01:00+00:00",
+                        "author": {"id": "99", "username": "killbot"},
+                        "attachments": [],
+                    },
+                ],
+            )
+        ]
+    )
+
+    result = await async_fetch_channel_messages(
+        session=session,
+        bot_token="token",
+        channel_id=123,
+        limit=2,
+    )
+
+    assert [message["message_id"] for message in result] == [20, 10]
+
+
+@pytest.mark.asyncio
 async def test_post_channel_message_retries_after_server_error(monkeypatch) -> None:
     session = FakeSession(
         [
