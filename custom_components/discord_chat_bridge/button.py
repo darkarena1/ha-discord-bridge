@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import DiscordBridgeRuntimeData, DiscordChatBridgeConfigEntry
 from .const import CONF_BOT_TOKEN, DOMAIN
-from .coordinator import apply_message_summary
+from .coordinator import cache_recent_message
 from .discord_api import (
     DiscordCannotConnectError,
     DiscordGuildAccessError,
@@ -65,7 +65,7 @@ class DiscordSendDraftButton(DiscordChatBridgeEntity, ButtonEntity):
             raise HomeAssistantError("Failed to reach Discord.") from exc
 
         self.runtime.drafts[self.channel_state.channel_id] = ""
-        apply_message_summary(self.runtime.guild_state, sent_message)
+        cache_recent_message(self.runtime.guild_state, sent_message)
         async_dispatcher_send(
             self.hass,
             channel_state_signal(self.runtime.entry_id, self.channel_state.channel_id),

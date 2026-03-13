@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import CONF_BOT_TOKEN
-from .coordinator import apply_message_summary
+from .coordinator import cache_recent_message
 from .discovery import async_schedule_discovery_refresh
 from .entity import channel_state_signal
 
@@ -49,7 +49,7 @@ async def async_handle_gateway_message(
     if channel_id not in runtime.guild_state.channels:
         return
 
-    apply_message_summary(runtime.guild_state, message_summary)
+    cache_recent_message(runtime.guild_state, message_summary)
     async_dispatcher_send(
         hass,
         channel_state_signal(runtime.entry_id, channel_id),

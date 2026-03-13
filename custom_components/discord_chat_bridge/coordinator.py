@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .const import CHANNEL_KIND_THREAD, OPTION_CHANNELS
+from .const import CHANNEL_KIND_THREAD, MAX_RECENT_MESSAGE_LIMIT, OPTION_CHANNELS
 from .discord_api import DiscordChannelDescription
 
 
@@ -20,6 +21,7 @@ class ChannelState:
     last_message_at: datetime | None = None
     posting_enabled: bool = False
     api_enabled: bool = False
+    recent_messages: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -117,3 +119,70 @@ def apply_message_summary(guild_state: GuildState, message: dict) -> None:
 
     channel.last_message_preview = content or "<no text>"
     channel.last_message_at = dt_util.parse_datetime(message["created_at"])
+
+
+def cache_recent_messages(
+    guild_state: GuildState,
+    channel_id: int,
+    messages: list[dict[str, Any]],
+    *,
+    limit: int = MAX_RECENT_MESSAGE_LIMIT,
+) -> None:
+    channel = guild_state.channels.get(channel_id)
+    if channel is None or not messages:
+        return
+
+    merged_by_id: dict[str, dict[str, Any]] = {}
+    for message in [*messages, *channel.recent_messages]:
+        merged_by_id.setdefault(_message_cache_key(message), message)
+
+    ordered_messages = sorted(
+        merged_by_id.values(),
+        key=_message_sort_key,
+        reverse=True,
+    )
+    channel.recent_messages = ordered_messages[:limit]
+    apply_message_summary(guild_state, channel.recent_messages[0])
+
+
+def cache_recent_message(
+    guild_state: GuildState,
+    message: dict[str, Any],
+    *,
+    limit: int = MAX_RECENT_MESSAGE_LIMIT,
+) -> None:
+    cache_recent_messages(
+        guild_state,
+        int(message["channel_id"]),
+        [message],
+        limit=limit,
+    )
+
+
+def get_cached_recent_messages(
+    guild_state: GuildState,
+    channel_id: int,
+    *,
+    limit: int,
+) -> list[dict[str, Any]] | None:
+    channel = guild_state.channels.get(channel_id)
+    if channel is None or len(channel.recent_messages) < limit:
+        return None
+    return channel.recent_messages[:limit]
+
+
+def _message_cache_key(message: dict[str, Any]) -> str:
+    if "message_id" in message:
+        return str(message["message_id"])
+
+    return (
+        f"{message.get('channel_id')}:{message.get('created_at')}:"
+        f"{message.get('author_id')}:{message.get('content')}"
+    )
+
+
+def _message_sort_key(message: dict[str, Any]) -> tuple[datetime, str]:
+    parsed = dt_util.parse_datetime(str(message.get("created_at", "")))
+    if parsed is None:
+        parsed = datetime.min.replace(tzinfo=dt_util.UTC)
+    return parsed, _message_cache_key(message)

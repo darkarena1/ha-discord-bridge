@@ -10,7 +10,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import API_HEADER, CONF_BOT_TOKEN, DOMAIN
-from .coordinator import apply_message_summary
+from .coordinator import cache_recent_message, cache_recent_messages, get_cached_recent_messages
 from .discord_api import (
     DiscordCannotConnectError,
     DiscordGuildAccessError,
@@ -186,6 +186,14 @@ class DiscordBridgeChannelMessagesView(DiscordBridgeBaseView):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
 
+        cached_messages = get_cached_recent_messages(
+            runtime.guild_state,
+            parsed_channel_id,
+            limit=limit_value,
+        )
+        if cached_messages is not None:
+            return self.json(cached_messages)
+
         session = async_get_clientsession(self.hass)
         try:
             messages = await async_fetch_channel_messages(
@@ -206,7 +214,11 @@ class DiscordBridgeChannelMessagesView(DiscordBridgeBaseView):
             )
 
         if messages:
-            apply_message_summary(runtime.guild_state, messages[-1])
+            cache_recent_messages(
+                runtime.guild_state,
+                parsed_channel_id,
+                messages,
+            )
             async_dispatcher_send(
                 self.hass,
                 channel_state_signal(runtime.entry_id, parsed_channel_id),
@@ -262,7 +274,7 @@ class DiscordBridgeChannelMessagesView(DiscordBridgeBaseView):
                 status_code=HTTPStatus.BAD_GATEWAY,
             )
 
-        apply_message_summary(runtime.guild_state, sent_message)
+        cache_recent_message(runtime.guild_state, sent_message)
         async_dispatcher_send(
             self.hass,
             channel_state_signal(runtime.entry_id, parsed_channel_id),
