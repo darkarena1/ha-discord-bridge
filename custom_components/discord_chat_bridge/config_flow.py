@@ -32,6 +32,12 @@ FORM_ENABLED_CHANNELS = "enabled_channels"
 FORM_POSTING_CHANNELS = "posting_channels"
 FORM_API_CHANNELS = "api_channels"
 FORM_ENABLED_ACTION = "enabled_action"
+FORM_CATEGORY_FILTER = "category_filter"
+FORM_CHANNEL_KIND_FILTER = "channel_kind_filter"
+FORM_SHOW_SELECTED_ONLY = "show_selected_only"
+
+CATEGORY_FILTER_ALL = "__all__"
+CATEGORY_FILTER_UNCATEGORIZED = "__uncategorized__"
 
 
 class EnabledAction(StrEnum):
@@ -40,6 +46,12 @@ class EnabledAction(StrEnum):
     SELECT_ALL_TEXT_CHANNELS = "select_all_text_channels"
     SELECT_ALL_THREADS = "select_all_threads"
     CLEAR_ALL = "clear_all"
+
+
+class ChannelKindFilter(StrEnum):
+    ALL = "all"
+    TEXT = "text_channel"
+    THREAD = "thread"
 
 
 def _parse_guild_id(value: object) -> int:
@@ -155,6 +167,61 @@ def _resolve_enabled_channels(
             return selected_channels
 
 
+def _category_selector_options(channel_map: dict[str, dict]) -> list[selector.SelectOptionDict]:
+    options = [
+        selector.SelectOptionDict(value=CATEGORY_FILTER_ALL, label="All categories"),
+        selector.SelectOptionDict(
+            value=CATEGORY_FILTER_UNCATEGORIZED,
+            label="Uncategorized",
+        ),
+    ]
+    categories = {
+        str(channel_data.get("category_id")): channel_data.get("category_name")
+        for channel_data in channel_map.values()
+        if channel_data.get("category_id") is not None and channel_data.get("category_name")
+    }
+    for category_id, category_name in sorted(
+        categories.items(),
+        key=lambda item: str(item[1]).casefold(),
+    ):
+        options.append(
+            selector.SelectOptionDict(
+                value=category_id,
+                label=str(category_name),
+            )
+        )
+    return options
+
+
+def _filter_channel_ids(
+    channel_map: dict[str, dict],
+    *,
+    category_filter: str,
+    kind_filter: str,
+    show_selected_only: bool,
+) -> set[str]:
+    include_ids: set[str] = set()
+    for channel_id, channel_data in channel_map.items():
+        if show_selected_only and not channel_data.get("enabled", False):
+            continue
+        if (
+            category_filter != CATEGORY_FILTER_ALL
+            and not _matches_category_filter(channel_data, category_filter)
+        ):
+            continue
+        if kind_filter != ChannelKindFilter.ALL.value and channel_data.get("kind") != kind_filter:
+            continue
+        include_ids.add(channel_id)
+    return include_ids
+
+
+def _matches_category_filter(channel_data: dict, category_filter: str) -> bool:
+    category_id = channel_data.get("category_id")
+    if category_filter == CATEGORY_FILTER_UNCATEGORIZED:
+        return category_id in {None, ""}
+    return str(category_id) == category_filter
+
+
 def _merge_channel_flag_updates(
     channel_map: dict[str, dict],
     *,
@@ -248,15 +315,96 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
     def __init__(self) -> None:
         self._enabled_channels: list[str] | None = None
         self._recent_message_limit = DEFAULT_RECENT_MESSAGE_LIMIT
+        self._category_filter = CATEGORY_FILTER_ALL
+        self._channel_kind_filter = ChannelKindFilter.ALL.value
+        self._show_selected_only = False
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         channel_map = self.config_entry.options.get(OPTION_CHANNELS, {})
 
         if user_input is not None:
-            self._enabled_channels = _resolve_enabled_channels(
-                channel_map,
-                selected_channels=user_input[FORM_ENABLED_CHANNELS],
-                enabled_action=user_input[FORM_ENABLED_ACTION],
+            self._recent_message_limit = user_input[OPTION_RECENT_MESSAGE_LIMIT]
+            self._category_filter = user_input[FORM_CATEGORY_FILTER]
+            self._channel_kind_filter = user_input[FORM_CHANNEL_KIND_FILTER]
+            self._show_selected_only = user_input[FORM_SHOW_SELECTED_ONLY]
+            return await self.async_step_enabled()
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    OPTION_RECENT_MESSAGE_LIMIT,
+                    default=self.config_entry.options.get(
+                        OPTION_RECENT_MESSAGE_LIMIT,
+                        DEFAULT_RECENT_MESSAGE_LIMIT,
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_RECENT_MESSAGE_LIMIT)),
+                vol.Required(
+                    FORM_CATEGORY_FILTER,
+                    default=self._category_filter,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=_category_selector_options(channel_map),
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    FORM_CHANNEL_KIND_FILTER,
+                    default=self._channel_kind_filter,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(
+                                value=ChannelKindFilter.ALL.value,
+                                label="All channel types",
+                            ),
+                            selector.SelectOptionDict(
+                                value=ChannelKindFilter.TEXT.value,
+                                label="Text channels",
+                            ),
+                            selector.SelectOptionDict(
+                                value=ChannelKindFilter.THREAD.value,
+                                label="Threads",
+                            ),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    FORM_SHOW_SELECTED_ONLY,
+                    default=self._show_selected_only,
+                ): bool,
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def async_step_enabled(self, user_input: dict | None = None) -> FlowResult:
+        channel_map = self.config_entry.options.get(OPTION_CHANNELS, {})
+        filtered_ids = _filter_channel_ids(
+            channel_map,
+            category_filter=self._category_filter,
+            kind_filter=self._channel_kind_filter,
+            show_selected_only=self._show_selected_only,
+        )
+
+        if user_input is not None:
+            existing_enabled = {
+                channel_id
+                for channel_id, channel_data in channel_map.items()
+                if channel_data.get("enabled", False)
+            }
+            resolved_filtered_enabled = set(
+                _resolve_enabled_channels(
+                    {
+                        channel_id: channel_data
+                        for channel_id, channel_data in channel_map.items()
+                        if channel_id in filtered_ids
+                    },
+                    selected_channels=user_input[FORM_ENABLED_CHANNELS],
+                    enabled_action=user_input[FORM_ENABLED_ACTION],
+                )
+            )
+            self._enabled_channels = sorted(
+                (existing_enabled - filtered_ids) | resolved_filtered_enabled
             )
 
             if not self._enabled_channels:
@@ -269,23 +417,15 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                             posting_channels=[],
                             api_channels=[],
                         ),
-                        OPTION_RECENT_MESSAGE_LIMIT: user_input[OPTION_RECENT_MESSAGE_LIMIT],
+                        OPTION_RECENT_MESSAGE_LIMIT: self._recent_message_limit,
                     },
                 )
 
-            self._recent_message_limit = user_input[OPTION_RECENT_MESSAGE_LIMIT]
             return await self.async_step_permissions()
 
-        channel_options = _channel_selector_options(channel_map)
+        channel_options = _channel_selector_options(channel_map, include_ids=filtered_ids)
         schema = vol.Schema(
             {
-                vol.Required(
-                    OPTION_RECENT_MESSAGE_LIMIT,
-                    default=self.config_entry.options.get(
-                        OPTION_RECENT_MESSAGE_LIMIT,
-                        DEFAULT_RECENT_MESSAGE_LIMIT,
-                    ),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_RECENT_MESSAGE_LIMIT)),
                 vol.Required(
                     FORM_ENABLED_ACTION,
                     default=EnabledAction.NONE.value,
@@ -321,7 +461,7 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                     default=[
                         channel_id
                         for channel_id, channel_data in channel_map.items()
-                        if channel_data.get("enabled", False)
+                        if channel_id in filtered_ids and channel_data.get("enabled", False)
                     ],
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
@@ -332,7 +472,7 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                 ),
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="enabled", data_schema=schema)
 
     async def async_step_permissions(self, user_input: dict | None = None) -> FlowResult:
         channel_map = self.config_entry.options.get(OPTION_CHANNELS, {})

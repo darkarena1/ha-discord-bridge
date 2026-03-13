@@ -22,6 +22,9 @@ class ChannelState:
     name: str
     kind: str
     parent_channel_id: int | None = None
+    parent_channel_name: str | None = None
+    category_id: int | None = None
+    category_name: str | None = None
     archived: bool = False
     enabled: bool = False
     last_message_preview: str | None = None
@@ -57,6 +60,9 @@ def merge_discovered_channel_settings(
             "kind": channel.kind,
             "position": channel.position,
             "parent_channel_id": channel.parent_channel_id,
+            "parent_channel_name": channel.parent_channel_name,
+            "category_id": channel.category_id,
+            "category_name": channel.category_name,
             "archived": channel.archived,
             "enabled": existing.get("enabled", False),
             "allow_posting": existing.get("allow_posting", False),
@@ -104,6 +110,9 @@ def build_guild_state(
             name=channel_data["name"],
             kind=channel_data["kind"],
             parent_channel_id=channel_data.get("parent_channel_id"),
+            parent_channel_name=channel_data.get("parent_channel_name"),
+            category_id=channel_data.get("category_id"),
+            category_name=channel_data.get("category_name"),
             archived=bool(channel_data.get("archived", False)),
             enabled=enabled,
             posting_enabled=enabled and bool(channel_data.get("allow_posting", False)),

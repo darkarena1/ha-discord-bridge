@@ -14,6 +14,8 @@ def test_merge_discovered_channel_settings_preserves_flags() -> None:
             name="general",
             kind="text_channel",
             position=1,
+            category_id=500,
+            category_name="Story",
         ),
         DiscordChannelDescription(
             channel_id=200,
@@ -21,6 +23,9 @@ def test_merge_discovered_channel_settings_preserves_flags() -> None:
             kind="thread",
             position=2,
             parent_channel_id=100,
+            parent_channel_name="general",
+            category_id=500,
+            category_name="Story",
         ),
     ]
     existing_options = {
@@ -40,10 +45,12 @@ def test_merge_discovered_channel_settings_preserves_flags() -> None:
 
     assert merged["recent_message_limit"] == 20
     assert merged["channels"]["100"]["name"] == "general"
+    assert merged["channels"]["100"]["category_name"] == "Story"
     assert merged["channels"]["100"]["enabled"] is True
     assert merged["channels"]["100"]["allow_posting"] is True
     assert merged["channels"]["100"]["include_in_api"] is False
     assert merged["channels"]["200"]["enabled"] is False
+    assert merged["channels"]["200"]["parent_channel_name"] == "general"
     assert merged["channels"]["200"]["allow_posting"] is False
     assert merged["channels"]["200"]["include_in_api"] is False
 
@@ -102,6 +109,9 @@ def test_build_guild_state_reads_channel_flags() -> None:
                     "name": "general",
                     "kind": "text_channel",
                     "parent_channel_id": None,
+                    "parent_channel_name": None,
+                    "category_id": 500,
+                    "category_name": "Story",
                     "archived": False,
                     "enabled": True,
                     "allow_posting": True,
@@ -114,6 +124,7 @@ def test_build_guild_state_reads_channel_flags() -> None:
     assert state.guild_id == 123
     assert state.guild_name == "KCBN"
     assert state.channels[100].enabled is True
+    assert state.channels[100].category_name == "Story"
     assert state.channels[100].archived is False
     assert state.channels[100].posting_enabled is True
     assert state.channels[100].api_enabled is True

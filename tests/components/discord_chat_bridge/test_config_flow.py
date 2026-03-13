@@ -3,10 +3,15 @@ from __future__ import annotations
 import pytest
 
 from custom_components.discord_chat_bridge.config_flow import (
+    CATEGORY_FILTER_ALL,
+    CATEGORY_FILTER_UNCATEGORIZED,
+    ChannelKindFilter,
     DiscordChatBridgeConfigFlow,
     DiscordChatBridgeOptionsFlow,
     EnabledAction,
+    _category_selector_options,
     _channel_selector_options,
+    _filter_channel_ids,
     _merge_channel_flag_updates,
     _parse_guild_id,
     _resolve_enabled_channels,
@@ -20,24 +25,34 @@ def test_channel_selector_options_are_alphabetized_with_threads_under_parent() -
             "kind": "text_channel",
             "position": 99,
             "parent_channel_id": None,
+            "category_id": 500,
+            "category_name": "Story",
         },
         "100": {
             "name": "zeta",
             "kind": "text_channel",
             "position": 1,
             "parent_channel_id": None,
+            "category_id": 500,
+            "category_name": "Story",
         },
         "200": {
             "name": "ops-thread",
             "kind": "thread",
             "position": 2,
             "parent_channel_id": 100,
+            "parent_channel_name": "zeta",
+            "category_id": 500,
+            "category_name": "Story",
         },
         "400": {
             "name": "alpha-thread",
             "kind": "thread",
             "position": 2,
             "parent_channel_id": 300,
+            "parent_channel_name": "alpha",
+            "category_id": 500,
+            "category_name": "Story",
         },
     }
 
@@ -58,18 +73,25 @@ def test_channel_selector_options_can_filter_to_subset() -> None:
             "kind": "text_channel",
             "position": 1,
             "parent_channel_id": None,
+            "category_id": 500,
+            "category_name": "Story",
         },
         "200": {
             "name": "ops-thread",
             "kind": "thread",
             "position": 2,
             "parent_channel_id": 100,
+            "parent_channel_name": "general",
+            "category_id": 500,
+            "category_name": "Story",
         },
         "300": {
             "name": "random",
             "kind": "text_channel",
             "position": 3,
             "parent_channel_id": None,
+            "category_id": None,
+            "category_name": None,
         },
     }
 
@@ -152,3 +174,80 @@ def test_resolve_enabled_channels_supports_bulk_actions(
     )
 
     assert resolved == expected
+
+
+def test_category_selector_options_include_known_categories() -> None:
+    channel_map = {
+        "100": {
+            "name": "general",
+            "kind": "text_channel",
+            "category_id": 500,
+            "category_name": "Story",
+        },
+        "200": {
+            "name": "random",
+            "kind": "text_channel",
+            "category_id": 600,
+            "category_name": "Play",
+        },
+    }
+
+    options = _category_selector_options(channel_map)
+
+    assert options == [
+        {"value": CATEGORY_FILTER_ALL, "label": "All categories"},
+        {"value": CATEGORY_FILTER_UNCATEGORIZED, "label": "Uncategorized"},
+        {"value": "600", "label": "Play"},
+        {"value": "500", "label": "Story"},
+    ]
+
+
+def test_filter_channel_ids_supports_category_kind_and_selected_filters() -> None:
+    channel_map = {
+        "100": {
+            "name": "general",
+            "kind": "text_channel",
+            "category_id": 500,
+            "category_name": "Story",
+            "enabled": True,
+        },
+        "200": {
+            "name": "ops-thread",
+            "kind": "thread",
+            "category_id": 500,
+            "category_name": "Story",
+            "enabled": False,
+        },
+        "300": {
+            "name": "random",
+            "kind": "text_channel",
+            "category_id": None,
+            "category_name": None,
+            "enabled": True,
+        },
+    }
+
+    assert _filter_channel_ids(
+        channel_map,
+        category_filter="500",
+        kind_filter=ChannelKindFilter.ALL.value,
+        show_selected_only=False,
+    ) == {"100", "200"}
+    assert _filter_channel_ids(
+        channel_map,
+        category_filter=CATEGORY_FILTER_ALL,
+        kind_filter=ChannelKindFilter.THREAD.value,
+        show_selected_only=False,
+    ) == {"200"}
+    assert _filter_channel_ids(
+        channel_map,
+        category_filter=CATEGORY_FILTER_UNCATEGORIZED,
+        kind_filter=ChannelKindFilter.TEXT.value,
+        show_selected_only=False,
+    ) == {"300"}
+    assert _filter_channel_ids(
+        channel_map,
+        category_filter=CATEGORY_FILTER_ALL,
+        kind_filter=ChannelKindFilter.ALL.value,
+        show_selected_only=True,
+    ) == {"100", "300"}

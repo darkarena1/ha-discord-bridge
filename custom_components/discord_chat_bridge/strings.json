@@ -22,9 +22,17 @@
   "options": {
     "step": {
       "init": {
-        "title": "Choose enabled channels",
+        "title": "Filter channel list",
         "data": {
           "recent_message_limit": "Default recent-message limit",
+          "category_filter": "Category filter",
+          "channel_kind_filter": "Channel type filter",
+          "show_selected_only": "Show enabled channels only"
+        }
+      },
+      "enabled": {
+        "title": "Choose enabled channels",
+        "data": {
           "enabled_action": "Bulk channel action",
           "enabled_channels": "Enabled channels"
         }

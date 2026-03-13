@@ -9,6 +9,7 @@ from custom_components.discord_chat_bridge.discord_api import (
     DiscordGuildAccessError,
     DiscordInvalidAuthError,
     async_fetch_channel_messages,
+    async_fetch_discoverable_channels,
     async_post_channel_message,
     async_validate_discord_credentials,
 )
@@ -203,3 +204,57 @@ async def test_post_channel_message_retries_after_server_error(monkeypatch) -> N
 
     assert sleeps == [1.0]
     assert result["message_id"] == 5
+
+
+@pytest.mark.asyncio
+async def test_fetch_discoverable_channels_includes_category_metadata() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(
+                200,
+                [
+                    {
+                        "id": "500",
+                        "type": 4,
+                        "name": "Story",
+                        "position": 1,
+                    },
+                    {
+                        "id": "100",
+                        "type": 0,
+                        "name": "general",
+                        "position": 1,
+                        "parent_id": "500",
+                    },
+                ],
+            ),
+            FakeResponse(
+                200,
+                {
+                    "threads": [
+                        {
+                            "id": "200",
+                            "type": 11,
+                            "name": "ops-thread",
+                            "position": 0,
+                            "parent_id": "100",
+                            "thread_metadata": {"archived": False},
+                        }
+                    ]
+                },
+            ),
+        ]
+    )
+
+    result = await async_fetch_discoverable_channels(
+        session=session,
+        bot_token="token",
+        guild_id=123,
+    )
+
+    assert result[0].channel_id == 100
+    assert result[0].category_id == 500
+    assert result[0].category_name == "Story"
+    assert result[1].channel_id == 200
+    assert result[1].parent_channel_name == "general"
+    assert result[1].category_name == "Story"

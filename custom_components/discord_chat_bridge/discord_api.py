@@ -44,6 +44,9 @@ class DiscordChannelDescription:
     kind: str
     position: int
     parent_channel_id: int | None = None
+    parent_channel_name: str | None = None
+    category_id: int | None = None
+    category_name: str | None = None
     archived: bool = False
 
 
@@ -152,7 +155,12 @@ def _channel_kind_from_type(channel_type: int) -> str | None:
     return None
 
 
-def _channel_from_payload(payload: dict[str, Any]) -> DiscordChannelDescription | None:
+def _channel_from_payload(
+    payload: dict[str, Any],
+    *,
+    category_lookup: dict[int, str] | None = None,
+    text_channel_lookup: dict[int, DiscordChannelDescription] | None = None,
+) -> DiscordChannelDescription | None:
     channel_type = payload.get("type")
     if not isinstance(channel_type, int):
         return None
@@ -161,16 +169,35 @@ def _channel_from_payload(payload: dict[str, Any]) -> DiscordChannelDescription 
     if kind is None:
         return None
 
+    parent_channel_id = (
+        int(payload["parent_id"])
+        if payload.get("parent_id") not in {None, ""}
+        else None
+    )
+    parent_channel_name: str | None = None
+    category_id: int | None = None
+    category_name: str | None = None
+
+    if kind == CHANNEL_KIND_TEXT:
+        category_id = parent_channel_id
+        if category_lookup is not None and category_id is not None:
+            category_name = category_lookup.get(category_id)
+    elif text_channel_lookup is not None and parent_channel_id is not None:
+        parent_channel = text_channel_lookup.get(parent_channel_id)
+        if parent_channel is not None:
+            parent_channel_name = parent_channel.name
+            category_id = parent_channel.category_id
+            category_name = parent_channel.category_name
+
     return DiscordChannelDescription(
         channel_id=int(payload["id"]),
         name=payload.get("name") or f"channel-{payload['id']}",
         kind=kind,
         position=int(payload.get("position", 0)),
-        parent_channel_id=(
-            int(payload["parent_id"])
-            if payload.get("parent_id") not in {None, ""}
-            else None
-        ),
+        parent_channel_id=parent_channel_id,
+        parent_channel_name=parent_channel_name,
+        category_id=category_id,
+        category_name=category_name,
         archived=bool(payload.get("thread_metadata", {}).get("archived", False)),
     )
 
@@ -234,12 +261,24 @@ async def async_fetch_discoverable_channels(
         raise DiscordCannotConnectError("Discord rejected the active threads request.")
 
     discovered: dict[int, DiscordChannelDescription] = {}
+    category_lookup: dict[int, str] = {}
 
     raw_channels = channels_payload if isinstance(channels_payload, list) else []
     for payload in raw_channels:
         if not isinstance(payload, dict):
             continue
-        channel = _channel_from_payload(payload)
+        if payload.get("type") != 4:
+            continue
+        try:
+            category_id = int(payload["id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        category_lookup[category_id] = payload.get("name") or f"category-{category_id}"
+
+    for payload in raw_channels:
+        if not isinstance(payload, dict):
+            continue
+        channel = _channel_from_payload(payload, category_lookup=category_lookup)
         if channel is None:
             continue
         discovered[channel.channel_id] = channel
@@ -249,7 +288,11 @@ async def async_fetch_discoverable_channels(
         for payload in raw_threads:
             if not isinstance(payload, dict):
                 continue
-            channel = _channel_from_payload(payload)
+            channel = _channel_from_payload(
+                payload,
+                category_lookup=category_lookup,
+                text_channel_lookup=discovered,
+            )
             if channel is None:
                 continue
             discovered[channel.channel_id] = channel
