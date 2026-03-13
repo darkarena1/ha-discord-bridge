@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .const import CHANNEL_KIND_THREAD, MAX_RECENT_MESSAGE_LIMIT, OPTION_CHANNELS
+from .const import (
+    CHANNEL_KIND_THREAD,
+    MAX_PINNED_MESSAGE_LIMIT,
+    MAX_RECENT_MESSAGE_LIMIT,
+    OPTION_CHANNELS,
+    PINNED_MESSAGE_CACHE_TTL_SECONDS,
+)
 from .discord_api import DiscordChannelDescription
 
 
@@ -23,6 +29,8 @@ class ChannelState:
     posting_enabled: bool = False
     api_enabled: bool = False
     recent_messages: list[dict[str, Any]] = field(default_factory=list)
+    pinned_messages: list[dict[str, Any]] = field(default_factory=list)
+    pinned_messages_refreshed_at: datetime | None = None
 
 
 @dataclass
@@ -171,6 +179,46 @@ def get_cached_recent_messages(
     if channel is None or len(channel.recent_messages) < limit:
         return None
     return channel.recent_messages[:limit]
+
+
+def cache_pinned_messages(
+    guild_state: GuildState,
+    channel_id: int,
+    messages: list[dict[str, Any]],
+    *,
+    refreshed_at: datetime | None = None,
+    limit: int = MAX_PINNED_MESSAGE_LIMIT,
+) -> None:
+    channel = guild_state.channels.get(channel_id)
+    if channel is None:
+        return
+
+    ordered_messages = sorted(
+        messages,
+        key=_message_sort_key,
+        reverse=True,
+    )
+    channel.pinned_messages = ordered_messages[:limit]
+    channel.pinned_messages_refreshed_at = refreshed_at or datetime.now(UTC)
+
+
+def get_cached_pinned_messages(
+    guild_state: GuildState,
+    channel_id: int,
+    *,
+    now: datetime | None = None,
+    ttl_seconds: int = PINNED_MESSAGE_CACHE_TTL_SECONDS,
+) -> list[dict[str, Any]] | None:
+    channel = guild_state.channels.get(channel_id)
+    if channel is None or channel.pinned_messages_refreshed_at is None:
+        return None
+
+    compare_now = now or datetime.now(UTC)
+    age = compare_now - channel.pinned_messages_refreshed_at
+    if age.total_seconds() > ttl_seconds:
+        return None
+
+    return channel.pinned_messages
 
 
 def _message_cache_key(message: dict[str, Any]) -> str:

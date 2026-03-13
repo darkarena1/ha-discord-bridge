@@ -10,7 +10,13 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import API_HEADER, CONF_BOT_TOKEN, DOMAIN
-from .coordinator import cache_recent_message, cache_recent_messages, get_cached_recent_messages
+from .coordinator import (
+    cache_pinned_messages,
+    cache_recent_message,
+    cache_recent_messages,
+    get_cached_pinned_messages,
+    get_cached_recent_messages,
+)
 from .discord_api import (
     DiscordCannotConnectError,
     DiscordGuildAccessError,
@@ -310,6 +316,13 @@ class DiscordBridgePinnedMessagesView(DiscordBridgeBaseView):
                 status_code=HTTPStatus.FORBIDDEN,
             )
 
+        cached_messages = get_cached_pinned_messages(
+            runtime.guild_state,
+            parsed_channel_id,
+        )
+        if cached_messages is not None:
+            return self.json(cached_messages)
+
         session = async_get_clientsession(self.hass)
         try:
             messages = await async_fetch_pinned_messages(
@@ -328,6 +341,7 @@ class DiscordBridgePinnedMessagesView(DiscordBridgeBaseView):
                 status_code=HTTPStatus.BAD_GATEWAY,
             )
 
+        cache_pinned_messages(runtime.guild_state, parsed_channel_id, messages)
         return self.json(messages)
 
 
