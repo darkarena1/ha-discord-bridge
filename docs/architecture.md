@@ -20,6 +20,14 @@ The integration will:
   - `guild_id`
   - integration API key for external calls
 
+For local development, the repo also provides a `.env.example` template with:
+- `DISCORD_BOT_TOKEN`
+- `DISCORD_GUILD_ID`
+- `DISCORD_CHAT_BRIDGE_API_KEY`
+
+These are developer conveniences only. Runtime configuration should live in the
+Home Assistant config entry, not in source-controlled files.
+
 ### Device model
 
 - One Home Assistant device per guild

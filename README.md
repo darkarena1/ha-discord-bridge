@@ -41,14 +41,30 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt
 ```
 
-### 2. Run Home Assistant locally
+### 2. Create local environment values
+
+```bash
+cp .env.example .env
+```
+
+Fill in:
+- `DISCORD_BOT_TOKEN`
+- `DISCORD_GUILD_ID`
+- `DISCORD_CHAT_BRIDGE_API_KEY`
+
+Notes:
+- `.env` is ignored by git
+- `.env.example` is the committed template
+- the integration will ultimately store production values in Home Assistant config entries
+- this file is for local development, scripts, and manual testing
+### 3. Run Home Assistant locally
 
 ```bash
 source .venv/bin/activate
 hass -c ./config
 ```
 
-### 3. Open Home Assistant
+### 4. Open Home Assistant
 
 By default:
 
@@ -71,3 +87,4 @@ These will be callable through your Home Assistant external URL once implemented
 
 - This design is intentionally independent of the Home Assistant OpenAI integration.
 - If you later want native Assist/LLM tool support inside Home Assistant too, that can be added on top.
+- Local secrets belong in `.env`, not in committed files.
