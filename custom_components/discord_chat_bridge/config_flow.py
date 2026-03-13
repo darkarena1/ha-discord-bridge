@@ -156,13 +156,10 @@ class DiscordChatBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry):
-        return DiscordChatBridgeOptionsFlow(config_entry)
+        return DiscordChatBridgeOptionsFlow()
 
 
 class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
-    def __init__(self, config_entry) -> None:
-        self.config_entry = config_entry
-
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         channel_map = self.config_entry.options.get(OPTION_CHANNELS, {})
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 import pytest
 
 from custom_components.discord_chat_bridge.config_flow import (
+    DiscordChatBridgeConfigFlow,
+    DiscordChatBridgeOptionsFlow,
     _channel_selector_options,
     _merge_channel_flag_updates,
     _parse_guild_id,
@@ -69,3 +71,9 @@ def test_parse_guild_id_accepts_digit_strings() -> None:
 def test_parse_guild_id_rejects_non_digit_values(value: str) -> None:
     with pytest.raises(ValueError):
         _parse_guild_id(value)
+
+
+def test_async_get_options_flow_returns_options_flow_instance() -> None:
+    flow = DiscordChatBridgeConfigFlow.async_get_options_flow(object())
+
+    assert isinstance(flow, DiscordChatBridgeOptionsFlow)
