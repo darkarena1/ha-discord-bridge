@@ -1,12 +1,12 @@
 {
   "domain": "discord_chat_bridge",
   "name": "Discord Chat Bridge",
-  "codeowners": [],
+  "codeowners": ["@darkarena1"],
   "config_flow": true,
-  "documentation": "https://example.com/discord_chat_bridge",
+  "documentation": "https://github.com/darkarena1/ha-discord-bridge",
   "integration_type": "service",
   "iot_class": "cloud_push",
-  "issue_tracker": "https://example.com/discord_chat_bridge/issues",
+  "issue_tracker": "https://github.com/darkarena1/ha-discord-bridge/issues",
   "loggers": ["discord"],
   "requirements": ["discord.py>=2.7.1"],
   "version": "0.1.0"

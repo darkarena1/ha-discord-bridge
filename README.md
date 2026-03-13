@@ -37,6 +37,24 @@ Implemented:
 - `config/`: local Home Assistant configuration for development
 - `tests/`: integration tests
 
+## Installation
+
+### HACS
+
+1. Push this repository to GitHub.
+2. In Home Assistant, open HACS.
+3. Add this repository as a custom repository:
+   - repository type: `Integration`
+4. Install `Discord Chat Bridge`.
+5. Restart Home Assistant.
+6. Add the integration from `Settings > Devices & Services`.
+
+### Manual
+
+1. Copy [custom_components/discord_chat_bridge](/Users/scottobryan/Source/ha-discord-bridge/custom_components/discord_chat_bridge) into your Home Assistant `config/custom_components/` directory.
+2. Restart Home Assistant.
+3. Add the integration from `Settings > Devices & Services`.
+
 ## Development Environment
 
 ### 1. Create the virtual environment
@@ -222,3 +240,4 @@ Use this checklist in a real Home Assistant instance with your Discord bot:
 - If you later want native Assist/LLM tool support inside Home Assistant too, that can be added on top.
 - Local secrets belong in `.env`, not in committed files.
 - The Discord bot should have the Message Content intent enabled if you want live message previews.
+- `manifest.json` currently assumes the eventual GitHub repo path will be `darkarena1/ha-discord-bridge`. Update those URLs if you publish elsewhere.
