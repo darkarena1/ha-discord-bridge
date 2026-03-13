@@ -56,6 +56,7 @@ def merge_discovered_channel_settings(
         existing = existing_channels.get(str(channel.channel_id), {})
         channel_id = str(channel.channel_id)
         discovered_ids.add(channel_id)
+        enabled = existing.get("enabled", False)
         merged_channels[channel_id] = {
             "name": channel.name,
             "kind": channel.kind,
@@ -65,9 +66,9 @@ def merge_discovered_channel_settings(
             "category_id": channel.category_id,
             "category_name": channel.category_name,
             "archived": channel.archived,
-            "enabled": existing.get("enabled", False),
-            "allow_posting": existing.get("allow_posting", False),
-            "include_in_api": existing.get("include_in_api", False),
+            "enabled": enabled,
+            "allow_posting": existing.get("allow_posting", enabled),
+            "include_in_api": existing.get("include_in_api", enabled),
         }
 
     for channel_id, channel_data in existing_channels.items():
@@ -116,8 +117,8 @@ def build_guild_state(
             category_name=channel_data.get("category_name"),
             archived=bool(channel_data.get("archived", False)),
             enabled=enabled,
-            posting_enabled=enabled and bool(channel_data.get("allow_posting", False)),
-            api_enabled=enabled and bool(channel_data.get("include_in_api", False)),
+            posting_enabled=enabled and bool(channel_data.get("allow_posting", True)),
+            api_enabled=enabled and bool(channel_data.get("include_in_api", True)),
         )
 
     return GuildState(

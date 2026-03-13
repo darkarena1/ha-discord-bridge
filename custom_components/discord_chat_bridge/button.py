@@ -28,7 +28,7 @@ async def async_setup_entry(
         [
             DiscordSendDraftButton(runtime, channel_state)
             for channel_state in runtime.guild_state.channels.values()
-            if channel_state.enabled
+            if channel_state.posting_enabled
         ]
     )
 

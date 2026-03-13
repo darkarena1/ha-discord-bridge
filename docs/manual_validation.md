@@ -24,8 +24,9 @@ Confirm the Discord bot has:
    - one text channel
    - one thread
 5. In the second options step:
-   - allow posting for one enabled channel
-   - enable API access for the channels you want externally visible
+   - verify enabled channels default to posting and API access
+   - disable posting for one enabled channel
+   - disable API access for one enabled channel
 
 ## Entity Validation
 
@@ -52,6 +53,10 @@ For each enabled channel, verify these entities exist:
    - the draft text + send button
    - the notify entity
 6. Confirm the message appears in Discord and cache counts increase.
+7. Confirm channels with posting disabled do not expose:
+   - `text.<channel>_draft`
+   - `button.<channel>_send_draft`
+   - `notify.<channel>`
 
 ## Archive Validation
 

@@ -20,7 +20,7 @@ Implemented:
 - Discord credential validation and guild bootstrap
 - text-channel and active-thread discovery
 - category-aware options flow with searchable channel selection
-- per-channel enablement, posting, and API exposure flags
+- per-channel enablement with opt-out posting and API restrictions
 - channel entities for active status, latest message, latest message author, timestamp, draft, send-draft, and notify
 - live Discord gateway updates for enabled channels
 - startup preload of recent messages for enabled channels so entity summaries are populated immediately
@@ -134,14 +134,15 @@ Recommended if you want thread behavior to be reliable:
 3. Open the integration options flow.
 4. Filter by category or channel kind if needed.
 5. Enable only the channels or threads you want managed.
-6. In the second step, choose which enabled channels:
-   - allow posting
-   - are exposed through the external API
+6. In the second step, optionally choose enabled channels where you want to:
+   - disable posting
+   - disable bridge API access
 7. Save options and verify the entities created for those channels.
 
 Notes:
 - all discovered channels start disabled
-- posting and API access are only configurable for enabled channels
+- enabled channels default to both posting and bridge API access
+- posting and API restrictions are opt-out for enabled channels
 - threads are labeled as `parent / thread` in the selector
 
 ## External API
@@ -212,6 +213,13 @@ Supported fields:
 - `limit`: optional message limit for `refresh_recent_messages`
 
 These only operate on channels already enabled in the integration.
+
+Entity creation rules:
+- enabled channels always get read-oriented entities
+- only posting-enabled channels get:
+  - `text.<channel>_draft`
+  - `button.<channel>_send_draft`
+  - `notify.<channel>`
 
 ## Diagnostics
 

@@ -118,8 +118,8 @@ def test_merge_channel_flag_updates_normalizes_posting_and_api_to_enabled_channe
     merged = _merge_channel_flag_updates(
         channel_map,
         enabled_channels=["100"],
-        posting_channels=["100", "200"],
-        api_channels=["200"],
+        posting_disabled_channels=[],
+        api_disabled_channels=["100", "200"],
     )
 
     assert merged["100"]["enabled"] is True
@@ -128,6 +128,31 @@ def test_merge_channel_flag_updates_normalizes_posting_and_api_to_enabled_channe
     assert merged["200"]["enabled"] is False
     assert merged["200"]["allow_posting"] is False
     assert merged["200"]["include_in_api"] is False
+
+
+def test_merge_channel_flag_updates_defaults_enabled_channels_to_posting_and_api() -> None:
+    channel_map = {
+        "100": {
+            "name": "general",
+            "kind": "text_channel",
+        },
+        "200": {
+            "name": "ops-thread",
+            "kind": "thread",
+        },
+    }
+
+    merged = _merge_channel_flag_updates(
+        channel_map,
+        enabled_channels=["100", "200"],
+        posting_disabled_channels=["200"],
+        api_disabled_channels=[],
+    )
+
+    assert merged["100"]["allow_posting"] is True
+    assert merged["100"]["include_in_api"] is True
+    assert merged["200"]["allow_posting"] is False
+    assert merged["200"]["include_in_api"] is True
 
 
 def test_parse_guild_id_accepts_digit_strings() -> None:

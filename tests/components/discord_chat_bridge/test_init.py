@@ -830,3 +830,74 @@ def test_async_cleanup_stale_entities_removes_disabled_channel_entities(
         "sensor.disabled_channel_last_message_author",
         "text.disabled_channel_draft",
     ]
+
+
+def test_async_cleanup_stale_entities_removes_posting_entities_for_read_only_channels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = FakeHomeAssistant()
+    entry = FakeEntry()
+    runtime = integration.DiscordBridgeRuntimeData(
+        entry_id=entry.entry_id,
+        guild_id=1234,
+        guild_name="KCBN",
+        bot_user_id=42,
+        bot_username="KillBot",
+        api_key="api-key",
+        entry_data=entry.data,
+        guild_state=build_guild_state(
+            1234,
+            "KCBN",
+            {
+                "channels": {
+                    "100": {
+                        "name": "read-only-channel",
+                        "kind": "text_channel",
+                        "enabled": True,
+                        "allow_posting": False,
+                        "include_in_api": True,
+                    },
+                }
+            },
+        ),
+        discovered_channels=(),
+    )
+    fake_registry = FakeEntityRegistry(
+        [
+            FakeRegistryEntry(
+                entity_id="sensor.read_only_channel_last_message",
+                unique_id="1234_100_last_message",
+            ),
+            FakeRegistryEntry(
+                entity_id="sensor.read_only_channel_last_message_author",
+                unique_id="1234_100_last_message_author",
+            ),
+            FakeRegistryEntry(
+                entity_id="text.read_only_channel_draft",
+                unique_id="1234_100_draft",
+            ),
+            FakeRegistryEntry(
+                entity_id="button.read_only_channel_send_draft",
+                unique_id="1234_100_send_draft",
+            ),
+            FakeRegistryEntry(
+                entity_id="notify.read_only_channel_notify",
+                unique_id="1234_100_notify",
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(er, "async_get", lambda hass: fake_registry)
+    monkeypatch.setattr(
+        er,
+        "async_entries_for_config_entry",
+        lambda registry, entry_id: list(fake_registry.entries),
+    )
+
+    integration.async_cleanup_stale_entities(hass, entry, runtime)
+
+    assert fake_registry.removed == [
+        "text.read_only_channel_draft",
+        "button.read_only_channel_send_draft",
+        "notify.read_only_channel_notify",
+    ]

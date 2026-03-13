@@ -95,7 +95,8 @@ Recommended configuration state per channel:
 
 Recommended default:
 - all discovered channels disabled initially
-- posting disabled until the channel is explicitly enabled
+- once enabled, posting and API access default to enabled
+- posting and API restrictions are managed as opt-out exceptions
 - threads follow the same rules as channels
 
 This gives a conservative and reviewable security posture.
@@ -103,7 +104,7 @@ This gives a conservative and reviewable security posture.
 Current options-flow behavior:
 - step 1 filters the discovered list by category, kind, and selected-state
 - step 2 chooses the enabled channels
-- step 3 chooses posting and API exposure only from the enabled set
+- step 3 optionally disables posting and API exposure for a subset of the enabled set
 - thread labels are shown as `parent / thread`
 
 ## Retrieval Limits

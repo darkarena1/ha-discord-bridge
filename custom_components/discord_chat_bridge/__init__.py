@@ -51,11 +51,13 @@ from .gateway import DiscordGatewayHandle, async_start_gateway, async_stop_gatew
 
 type DiscordChatBridgeConfigEntry = ConfigEntry
 PLATFORMS = ["binary_sensor", "sensor", "text", "button", "notify"]
-ENTITY_UNIQUE_SUFFIXES = (
+BASE_ENTITY_UNIQUE_SUFFIXES = (
     "active",
     "last_message",
     "last_message_author",
     "last_message_at",
+)
+POSTING_ENTITY_UNIQUE_SUFFIXES = (
     "draft",
     "send_draft",
     "notify",
@@ -437,7 +439,10 @@ def async_cleanup_stale_entities(
         f"{runtime.guild_id}_{channel_state.channel_id}_{suffix}"
         for channel_state in runtime.guild_state.channels.values()
         if channel_state.enabled
-        for suffix in ENTITY_UNIQUE_SUFFIXES
+        for suffix in (
+            BASE_ENTITY_UNIQUE_SUFFIXES
+            + (POSTING_ENTITY_UNIQUE_SUFFIXES if channel_state.posting_enabled else ())
+        )
     }
 
     for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):

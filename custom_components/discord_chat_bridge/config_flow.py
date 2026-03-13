@@ -29,8 +29,8 @@ from .discord_api import (
 )
 
 FORM_ENABLED_CHANNELS = "enabled_channels"
-FORM_POSTING_CHANNELS = "posting_channels"
-FORM_API_CHANNELS = "api_channels"
+FORM_POSTING_DISABLED_CHANNELS = "posting_disabled_channels"
+FORM_API_DISABLED_CHANNELS = "api_disabled_channels"
 FORM_ENABLED_ACTION = "enabled_action"
 FORM_CATEGORY_FILTER = "category_filter"
 FORM_CHANNEL_KIND_FILTER = "channel_kind_filter"
@@ -226,19 +226,19 @@ def _merge_channel_flag_updates(
     channel_map: dict[str, dict],
     *,
     enabled_channels: list[str],
-    posting_channels: list[str],
-    api_channels: list[str],
+    posting_disabled_channels: list[str],
+    api_disabled_channels: list[str],
 ) -> dict[str, dict]:
     enabled_ids = set(enabled_channels)
-    posting_ids = set(posting_channels) & enabled_ids
-    api_ids = set(api_channels) & enabled_ids
+    posting_disabled_ids = set(posting_disabled_channels) & enabled_ids
+    api_disabled_ids = set(api_disabled_channels) & enabled_ids
 
     return {
         channel_id: {
             **channel_data,
             "enabled": channel_id in enabled_ids,
-            "allow_posting": channel_id in posting_ids,
-            "include_in_api": channel_id in api_ids,
+            "allow_posting": channel_id in enabled_ids and channel_id not in posting_disabled_ids,
+            "include_in_api": channel_id in enabled_ids and channel_id not in api_disabled_ids,
         }
         for channel_id, channel_data in channel_map.items()
     }
@@ -414,8 +414,8 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                         OPTION_CHANNELS: _merge_channel_flag_updates(
                             channel_map,
                             enabled_channels=[],
-                            posting_channels=[],
-                            api_channels=[],
+                            posting_disabled_channels=[],
+                            api_disabled_channels=[],
                         ),
                         OPTION_RECENT_MESSAGE_LIMIT: self._recent_message_limit,
                     },
@@ -489,8 +489,8 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                     OPTION_CHANNELS: _merge_channel_flag_updates(
                         channel_map,
                         enabled_channels=enabled_channels,
-                        posting_channels=user_input[FORM_POSTING_CHANNELS],
-                        api_channels=user_input[FORM_API_CHANNELS],
+                        posting_disabled_channels=user_input[FORM_POSTING_DISABLED_CHANNELS],
+                        api_disabled_channels=user_input[FORM_API_DISABLED_CHANNELS],
                     ),
                     OPTION_RECENT_MESSAGE_LIMIT: self._recent_message_limit,
                 },
@@ -501,12 +501,12 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required(
-                    FORM_POSTING_CHANNELS,
+                    FORM_POSTING_DISABLED_CHANNELS,
                     default=[
                         channel_id
                         for channel_id, channel_data in channel_map.items()
                         if channel_id in enabled_channel_ids
-                        and channel_data.get("allow_posting", False)
+                        and not channel_data.get("allow_posting", True)
                     ],
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
@@ -516,12 +516,12 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                     )
                 ),
                 vol.Required(
-                    FORM_API_CHANNELS,
+                    FORM_API_DISABLED_CHANNELS,
                     default=[
                         channel_id
                         for channel_id, channel_data in channel_map.items()
                         if channel_id in enabled_channel_ids
-                        and channel_data.get("include_in_api", False)
+                        and not channel_data.get("include_in_api", True)
                     ],
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
