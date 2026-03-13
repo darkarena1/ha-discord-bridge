@@ -348,6 +348,39 @@ async def test_refresh_discovery_service_handler_filters_by_guild(
     )
 
     schedule_refresh.reset_mock()
-    await handler(SimpleNamespace(data={CONF_GUILD_ID: 222}))
+    await handler(SimpleNamespace(data={CONF_GUILD_ID: "222"}))
 
     schedule_refresh.assert_awaited_once_with(hass, entry_two, runtime_two, immediate=True)
+
+
+@pytest.mark.asyncio
+async def test_refresh_discovery_service_handler_ignores_invalid_guild_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = FakeHomeAssistant()
+    entry = FakeEntry(entry_id="entry-1", data={
+        CONF_BOT_TOKEN: "token-1",
+        CONF_GUILD_ID: 111,
+        CONF_API_KEY: "shared-key",
+    })
+    hass.config_entries.entries_by_domain[DOMAIN] = [entry]
+    runtime = integration.DiscordBridgeRuntimeData(
+        entry_id=entry.entry_id,
+        guild_id=111,
+        guild_name="Guild One",
+        bot_user_id=1,
+        bot_username="Bot One",
+        api_key="shared-key",
+        entry_data=entry.data,
+        guild_state=build_guild_state(111, "Guild One", {}),
+        discovered_channels=(),
+    )
+    hass.data[DOMAIN] = {entry.entry_id: runtime}
+
+    schedule_refresh = AsyncMock()
+    monkeypatch.setattr(integration, "async_schedule_discovery_refresh", schedule_refresh)
+    handler = integration._make_refresh_discovery_handler(hass)
+
+    await handler(SimpleNamespace(data={CONF_GUILD_ID: "not-a-number"}))
+
+    schedule_refresh.assert_not_awaited()

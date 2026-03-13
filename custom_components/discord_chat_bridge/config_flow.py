@@ -31,6 +31,13 @@ FORM_POSTING_CHANNELS = "posting_channels"
 FORM_API_CHANNELS = "api_channels"
 
 
+def _parse_guild_id(value: object) -> int:
+    parsed = str(value).strip()
+    if not parsed.isdigit():
+        raise ValueError("Guild ID must contain only digits.")
+    return int(parsed)
+
+
 def _channel_label(
     channel_id: str,
     channel_data: dict,
@@ -92,42 +99,56 @@ class DiscordChatBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            session = async_get_clientsession(self.hass)
             try:
-                bootstrap = await async_validate_discord_credentials(
-                    session=session,
-                    bot_token=user_input[CONF_BOT_TOKEN],
-                    guild_id=user_input[CONF_GUILD_ID],
-                )
-            except DiscordInvalidAuthError:
-                errors["base"] = "invalid_auth"
-            except DiscordGuildAccessError:
-                errors["base"] = "guild_not_found"
-            except DiscordCannotConnectError:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                errors["base"] = "unknown"
+                guild_id = _parse_guild_id(user_input[CONF_GUILD_ID])
+            except ValueError:
+                errors[CONF_GUILD_ID] = "invalid_guild_id"
             else:
-                await self.async_set_unique_id(str(bootstrap.guild_id))
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=bootstrap.guild_name,
-                    data={
-                        **user_input,
-                        ENTRY_DATA_GUILD_NAME: bootstrap.guild_name,
-                        ENTRY_DATA_BOT_USER_ID: bootstrap.bot_user_id,
-                        ENTRY_DATA_BOT_USERNAME: bootstrap.bot_username,
-                    },
-                    options={
-                        OPTION_CHANNELS: {},
-                        OPTION_RECENT_MESSAGE_LIMIT: DEFAULT_RECENT_MESSAGE_LIMIT,
-                    },
-                )
+                normalized_input = {
+                    **user_input,
+                    CONF_GUILD_ID: guild_id,
+                }
+
+                session = async_get_clientsession(self.hass)
+                try:
+                    bootstrap = await async_validate_discord_credentials(
+                        session=session,
+                        bot_token=normalized_input[CONF_BOT_TOKEN],
+                        guild_id=normalized_input[CONF_GUILD_ID],
+                    )
+                except DiscordInvalidAuthError:
+                    errors["base"] = "invalid_auth"
+                except DiscordGuildAccessError:
+                    errors["base"] = "guild_not_found"
+                except DiscordCannotConnectError:
+                    errors["base"] = "cannot_connect"
+                except Exception:
+                    errors["base"] = "unknown"
+                else:
+                    await self.async_set_unique_id(str(bootstrap.guild_id))
+                    self._abort_if_unique_id_configured()
+                    return self.async_create_entry(
+                        title=bootstrap.guild_name,
+                        data={
+                            **normalized_input,
+                            ENTRY_DATA_GUILD_NAME: bootstrap.guild_name,
+                            ENTRY_DATA_BOT_USER_ID: bootstrap.bot_user_id,
+                            ENTRY_DATA_BOT_USERNAME: bootstrap.bot_username,
+                        },
+                        options={
+                            OPTION_CHANNELS: {},
+                            OPTION_RECENT_MESSAGE_LIMIT: DEFAULT_RECENT_MESSAGE_LIMIT,
+                        },
+                    )
+
+        default_guild_id = ""
+        if user_input is not None:
+            default_guild_id = str(user_input.get(CONF_GUILD_ID, "")).strip()
 
         schema = vol.Schema(
             {
                 vol.Required(CONF_BOT_TOKEN): str,
-                vol.Required(CONF_GUILD_ID): int,
+                vol.Required(CONF_GUILD_ID, default=default_guild_id): str,
                 vol.Required(CONF_API_KEY): str,
             }
         )

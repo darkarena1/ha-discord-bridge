@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from custom_components.discord_chat_bridge.config_flow import (
     _channel_selector_options,
     _merge_channel_flag_updates,
+    _parse_guild_id,
 )
 
 
@@ -55,3 +58,14 @@ def test_merge_channel_flag_updates_normalizes_posting_and_api_to_enabled_channe
     assert merged["200"]["enabled"] is False
     assert merged["200"]["allow_posting"] is False
     assert merged["200"]["include_in_api"] is False
+
+
+def test_parse_guild_id_accepts_digit_strings() -> None:
+    assert _parse_guild_id("1352756714700669069") == 1352756714700669069
+    assert _parse_guild_id(" 1352756714700669069 ") == 1352756714700669069
+
+
+@pytest.mark.parametrize("value", ["", "guild", "123abc", "123.45"])
+def test_parse_guild_id_rejects_non_digit_values(value: str) -> None:
+    with pytest.raises(ValueError):
+        _parse_guild_id(value)

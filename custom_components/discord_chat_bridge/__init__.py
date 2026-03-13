@@ -37,6 +37,17 @@ type DiscordChatBridgeConfigEntry = ConfigEntry
 PLATFORMS = ["binary_sensor", "sensor", "text", "button", "notify"]
 
 
+def _parse_guild_id_filter(value: object | None) -> int | None:
+    if value is None:
+        return None
+    parsed = str(value).strip()
+    if not parsed:
+        return None
+    if not parsed.isdigit():
+        raise ValueError("Guild ID must contain only digits.")
+    return int(parsed)
+
+
 @dataclass
 class DiscordBridgeRuntimeData:
     entry_id: str
@@ -63,7 +74,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             DOMAIN,
             SERVICE_REFRESH_DISCOVERY,
             _make_refresh_discovery_handler(hass),
-            schema=vol.Schema({vol.Optional(CONF_GUILD_ID): int}),
+            schema=vol.Schema({vol.Optional(CONF_GUILD_ID): str}),
         )
     return True
 
@@ -163,7 +174,10 @@ def _make_refresh_discovery_handler(
     hass: HomeAssistant,
 ) -> Callable[[ServiceCall], Awaitable[None]]:
     async def _handler(call: ServiceCall) -> None:
-        requested_guild_id = call.data.get(CONF_GUILD_ID)
+        try:
+            requested_guild_id = _parse_guild_id_filter(call.data.get(CONF_GUILD_ID))
+        except ValueError:
+            return
         entries = hass.config_entries.async_entries(DOMAIN)
         for entry in entries:
             runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id)
