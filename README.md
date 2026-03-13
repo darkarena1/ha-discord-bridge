@@ -49,6 +49,10 @@ Implemented:
 5. Restart Home Assistant.
 6. Add the integration from `Settings > Devices & Services`.
 
+After the repository is added in HACS, HACS will download the integration into Home Assistant for you. It does not complete configuration automatically:
+- you still need to restart Home Assistant after install or upgrade
+- you still need to add/configure the integration from `Devices & Services`
+
 ### Manual
 
 1. Copy [custom_components/discord_chat_bridge](/Users/scottobryan/Source/ha-discord-bridge/custom_components/discord_chat_bridge) into your Home Assistant `config/custom_components/` directory.
