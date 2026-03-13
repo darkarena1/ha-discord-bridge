@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from custom_components.discord_chat_bridge.binary_sensor import (
+    DiscordChannelActiveBinarySensor,
+)
 from custom_components.discord_chat_bridge.coordinator import ChannelState, GuildState
-from custom_components.discord_chat_bridge.sensor import DiscordChannelStatusSensor
 
 
 @dataclass
@@ -14,8 +16,8 @@ class FakeRuntime:
     guild_state: GuildState
 
 
-def test_channel_status_sensor_reports_active() -> None:
-    sensor = DiscordChannelStatusSensor(
+def test_channel_active_binary_sensor_reports_active_as_on() -> None:
+    sensor = DiscordChannelActiveBinarySensor(
         FakeRuntime(
             entry_id="entry-1",
             guild_id=1,
@@ -31,11 +33,11 @@ def test_channel_status_sensor_reports_active() -> None:
     )
 
     assert sensor.available is True
-    assert sensor.native_value == "active"
+    assert sensor.is_on is True
 
 
-def test_channel_status_sensor_reports_archived_but_stays_available() -> None:
-    sensor = DiscordChannelStatusSensor(
+def test_channel_active_binary_sensor_reports_archived_as_off() -> None:
+    sensor = DiscordChannelActiveBinarySensor(
         FakeRuntime(
             entry_id="entry-1",
             guild_id=1,
@@ -51,4 +53,4 @@ def test_channel_status_sensor_reports_archived_but_stays_available() -> None:
     )
 
     assert sensor.available is True
-    assert sensor.native_value == "archived"
+    assert sensor.is_on is False

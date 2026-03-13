@@ -34,7 +34,7 @@ from .discovery import async_schedule_discovery_refresh
 from .gateway import DiscordGatewayHandle, async_start_gateway, async_stop_gateway
 
 type DiscordChatBridgeConfigEntry = ConfigEntry
-PLATFORMS = ["sensor", "text", "button", "notify"]
+PLATFORMS = ["binary_sensor", "sensor", "text", "button", "notify"]
 
 
 @dataclass
