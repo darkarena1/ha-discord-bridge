@@ -19,6 +19,8 @@ CHANNEL_KIND_THREAD = "thread"
 
 SIGNAL_CHANNEL_STATE_UPDATED = "discord_chat_bridge_channel_state_updated"
 SERVICE_REFRESH_DISCOVERY = "refresh_discovery"
+SERVICE_REFRESH_PINS = "refresh_pins"
+SERVICE_REFRESH_RECENT_MESSAGES = "refresh_recent_messages"
 
 DEFAULT_RECENT_MESSAGE_LIMIT = 20
 MAX_RECENT_MESSAGE_LIMIT = 50

@@ -1,15 +1,35 @@
-post_message:
+refresh_discovery:
   fields:
-    channel_id:
-      required: true
-      selector:
-        number:
-          min: 1
-          mode: box
-    message:
-      required: true
+    guild_id:
+      required: false
       selector:
         text:
 
-refresh_channels:
-  fields: {}
+refresh_recent_messages:
+  fields:
+    guild_id:
+      required: false
+      selector:
+        text:
+    channel_id:
+      required: false
+      selector:
+        text:
+    limit:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+
+refresh_pins:
+  fields:
+    guild_id:
+      required: false
+      selector:
+        text:
+    channel_id:
+      required: false
+      selector:
+        text:

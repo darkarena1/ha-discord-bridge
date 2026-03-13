@@ -14,11 +14,15 @@ from custom_components.discord_chat_bridge.const import (
     CONF_API_KEY,
     CONF_BOT_TOKEN,
     CONF_GUILD_ID,
+    DEFAULT_RECENT_MESSAGE_LIMIT,
     DOMAIN,
     ENTRY_DATA_BOT_USER_ID,
     ENTRY_DATA_BOT_USERNAME,
     ENTRY_DATA_GUILD_NAME,
+    OPTION_RECENT_MESSAGE_LIMIT,
     SERVICE_REFRESH_DISCOVERY,
+    SERVICE_REFRESH_PINS,
+    SERVICE_REFRESH_RECENT_MESSAGES,
 )
 from custom_components.discord_chat_bridge.coordinator import build_guild_state
 from custom_components.discord_chat_bridge.discord_api import (
@@ -174,6 +178,8 @@ async def test_async_setup_registers_views_and_service_once(
 
     assert register_views.call_count == 1
     assert hass.services.has_service(DOMAIN, SERVICE_REFRESH_DISCOVERY)
+    assert hass.services.has_service(DOMAIN, SERVICE_REFRESH_RECENT_MESSAGES)
+    assert hass.services.has_service(DOMAIN, SERVICE_REFRESH_PINS)
 
 
 @pytest.mark.asyncio
@@ -410,6 +416,253 @@ async def test_refresh_discovery_service_handler_ignores_invalid_guild_id(
     await handler(SimpleNamespace(data={CONF_GUILD_ID: "not-a-number"}))
 
     schedule_refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_refresh_recent_messages_service_updates_enabled_channels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = FakeHomeAssistant()
+    entry = FakeEntry(
+        entry_id="entry-1",
+        data={
+            CONF_BOT_TOKEN: "token-1",
+            CONF_GUILD_ID: 111,
+            CONF_API_KEY: "shared-key",
+        },
+        options={
+            OPTION_RECENT_MESSAGE_LIMIT: 7,
+            "channels": {
+                "100": {
+                    "name": "briefing",
+                    "kind": "text_channel",
+                    "enabled": True,
+                    "allow_posting": False,
+                    "include_in_api": True,
+                },
+                "200": {
+                    "name": "ignored",
+                    "kind": "text_channel",
+                    "enabled": False,
+                    "allow_posting": False,
+                    "include_in_api": False,
+                },
+            },
+        },
+    )
+    hass.config_entries.entries_by_domain[DOMAIN] = [entry]
+    runtime = integration.DiscordBridgeRuntimeData(
+        entry_id=entry.entry_id,
+        guild_id=111,
+        guild_name="Guild One",
+        bot_user_id=1,
+        bot_username="Bot One",
+        api_key="shared-key",
+        entry_data=entry.data,
+        guild_state=build_guild_state(111, "Guild One", entry.options),
+        discovered_channels=(),
+    )
+    hass.data[DOMAIN] = {entry.entry_id: runtime}
+
+    fetch_messages = AsyncMock(
+        return_value=[
+            {
+                "message_id": 999,
+                "channel_id": 100,
+                "author_id": 5,
+                "author_name": "GM",
+                "content": "Fresh cache",
+                "created_at": "2026-03-13T12:00:00+00:00",
+                "jump_url": "https://discord.example/messages/999",
+                "attachments": (),
+            }
+        ]
+    )
+    send_signal = MagicMock()
+    session = object()
+    monkeypatch.setattr(integration, "async_get_clientsession", lambda hass: session)
+    monkeypatch.setattr(integration, "async_fetch_channel_messages", fetch_messages)
+    monkeypatch.setattr(integration, "async_dispatcher_send", send_signal)
+    handler = integration._make_refresh_recent_messages_handler(hass)
+
+    await handler(SimpleNamespace(data={}))
+
+    fetch_messages.assert_awaited_once_with(
+        session=session,
+        bot_token="token-1",
+        channel_id=100,
+        limit=7,
+    )
+    assert runtime.guild_state.channels[100].last_message_preview == "Fresh cache"
+    assert len(runtime.guild_state.channels[100].recent_messages) == 1
+    assert runtime.guild_state.channels[200].recent_messages == []
+    send_signal.assert_called_once_with(
+        hass,
+        "discord_chat_bridge_channel_state_updated_entry-1_100",
+    )
+
+
+@pytest.mark.asyncio
+async def test_refresh_recent_messages_service_honors_filters_and_limit_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = FakeHomeAssistant()
+    entry = FakeEntry(
+        entry_id="entry-1",
+        data={
+            CONF_BOT_TOKEN: "token-1",
+            CONF_GUILD_ID: 111,
+            CONF_API_KEY: "shared-key",
+        },
+        options={
+            OPTION_RECENT_MESSAGE_LIMIT: DEFAULT_RECENT_MESSAGE_LIMIT,
+            "channels": {
+                "100": {
+                    "name": "briefing",
+                    "kind": "text_channel",
+                    "enabled": True,
+                    "allow_posting": False,
+                    "include_in_api": True,
+                }
+            },
+        },
+    )
+    other_entry = FakeEntry(
+        entry_id="entry-2",
+        data={
+            CONF_BOT_TOKEN: "token-2",
+            CONF_GUILD_ID: 222,
+            CONF_API_KEY: "shared-key",
+        },
+        options={
+            "channels": {
+                "300": {
+                    "name": "ops",
+                    "kind": "text_channel",
+                    "enabled": True,
+                    "allow_posting": False,
+                    "include_in_api": True,
+                }
+            },
+        },
+    )
+    hass.config_entries.entries_by_domain[DOMAIN] = [entry, other_entry]
+    hass.data[DOMAIN] = {
+        entry.entry_id: integration.DiscordBridgeRuntimeData(
+            entry_id=entry.entry_id,
+            guild_id=111,
+            guild_name="Guild One",
+            bot_user_id=1,
+            bot_username="Bot One",
+            api_key="shared-key",
+            entry_data=entry.data,
+            guild_state=build_guild_state(111, "Guild One", entry.options),
+            discovered_channels=(),
+        ),
+        other_entry.entry_id: integration.DiscordBridgeRuntimeData(
+            entry_id=other_entry.entry_id,
+            guild_id=222,
+            guild_name="Guild Two",
+            bot_user_id=2,
+            bot_username="Bot Two",
+            api_key="shared-key",
+            entry_data=other_entry.data,
+            guild_state=build_guild_state(222, "Guild Two", other_entry.options),
+            discovered_channels=(),
+        ),
+    }
+
+    fetch_messages = AsyncMock(return_value=[])
+    session = object()
+    monkeypatch.setattr(integration, "async_get_clientsession", lambda hass: session)
+    monkeypatch.setattr(integration, "async_fetch_channel_messages", fetch_messages)
+    monkeypatch.setattr(integration, "async_dispatcher_send", MagicMock())
+    handler = integration._make_refresh_recent_messages_handler(hass)
+
+    await handler(SimpleNamespace(data={CONF_GUILD_ID: "111", "channel_id": "100", "limit": 3}))
+
+    fetch_messages.assert_awaited_once()
+    assert fetch_messages.await_args.kwargs["bot_token"] == "token-1"
+    assert fetch_messages.await_args.kwargs["channel_id"] == 100
+    assert fetch_messages.await_args.kwargs["limit"] == 3
+
+
+@pytest.mark.asyncio
+async def test_refresh_pins_service_updates_target_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = FakeHomeAssistant()
+    entry = FakeEntry(
+        entry_id="entry-1",
+        data={
+            CONF_BOT_TOKEN: "token-1",
+            CONF_GUILD_ID: 111,
+            CONF_API_KEY: "shared-key",
+        },
+        options={
+            "channels": {
+                "100": {
+                    "name": "briefing",
+                    "kind": "text_channel",
+                    "enabled": True,
+                    "allow_posting": False,
+                    "include_in_api": True,
+                },
+                "200": {
+                    "name": "ops",
+                    "kind": "text_channel",
+                    "enabled": True,
+                    "allow_posting": False,
+                    "include_in_api": True,
+                },
+            },
+        },
+    )
+    hass.config_entries.entries_by_domain[DOMAIN] = [entry]
+    runtime = integration.DiscordBridgeRuntimeData(
+        entry_id=entry.entry_id,
+        guild_id=111,
+        guild_name="Guild One",
+        bot_user_id=1,
+        bot_username="Bot One",
+        api_key="shared-key",
+        entry_data=entry.data,
+        guild_state=build_guild_state(111, "Guild One", entry.options),
+        discovered_channels=(),
+    )
+    hass.data[DOMAIN] = {entry.entry_id: runtime}
+
+    fetch_pins = AsyncMock(
+        return_value=[
+            {
+                "message_id": 700,
+                "channel_id": 200,
+                "author_id": 8,
+                "author_name": "GM",
+                "content": "Pinned rule",
+                "created_at": "2026-03-13T13:00:00+00:00",
+                "jump_url": "https://discord.example/messages/700",
+                "attachments": (),
+            }
+        ]
+    )
+    send_signal = MagicMock()
+    session = object()
+    monkeypatch.setattr(integration, "async_get_clientsession", lambda hass: session)
+    monkeypatch.setattr(integration, "async_fetch_pinned_messages", fetch_pins)
+    monkeypatch.setattr(integration, "async_dispatcher_send", send_signal)
+    handler = integration._make_refresh_pins_handler(hass)
+
+    await handler(SimpleNamespace(data={"channel_id": "200"}))
+
+    fetch_pins.assert_awaited_once()
+    assert fetch_pins.await_args.kwargs["channel_id"] == 200
+    assert len(runtime.guild_state.channels[200].pinned_messages) == 1
+    assert runtime.guild_state.channels[100].pinned_messages == []
+    send_signal.assert_called_once_with(
+        hass,
+        "discord_chat_bridge_channel_state_updated_entry-1_200",
+    )
 
 
 def test_async_cleanup_stale_entities_removes_disabled_channel_entities(
