@@ -29,10 +29,12 @@ from .discord_api import (
 )
 
 type DiscordChatBridgeConfigEntry = ConfigEntry
+PLATFORMS = ["sensor", "text", "button", "notify"]
 
 
 @dataclass(frozen=True)
 class DiscordBridgeRuntimeData:
+    entry_id: str
     guild_id: int
     guild_name: str
     bot_user_id: int
@@ -41,6 +43,7 @@ class DiscordBridgeRuntimeData:
     entry_data: dict
     guild_state: GuildState
     discovered_channels: tuple[DiscordChannelDescription, ...]
+    drafts: dict[int, str]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -94,6 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
     )
 
     runtime = DiscordBridgeRuntimeData(
+        entry_id=entry.entry_id,
         guild_id=bootstrap.guild_id,
         guild_name=bootstrap.guild_name,
         bot_user_id=bootstrap.bot_user_id,
@@ -102,6 +106,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
         entry_data=entry.data,
         guild_state=guild_state,
         discovered_channels=tuple(discovered_channels),
+        drafts={},
     )
     hass.data[DOMAIN][entry.entry_id] = runtime
 
@@ -122,9 +127,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
             data=updated_data,
             options=merged_options,
         )
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigEntry) -> bool:
+    await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     hass.data[DOMAIN].pop(entry.entry_id, None)
     return True

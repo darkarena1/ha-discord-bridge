@@ -7,8 +7,10 @@ from aiohttp import web
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import http
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import API_HEADER, CONF_BOT_TOKEN, DOMAIN
+from .coordinator import apply_message_summary
 from .discord_api import (
     DiscordCannotConnectError,
     DiscordGuildAccessError,
@@ -16,6 +18,7 @@ from .discord_api import (
     async_fetch_pinned_messages,
     async_post_channel_message,
 )
+from .entity import channel_state_signal
 
 
 def _matching_runtimes_for_api_key(hass: HomeAssistant, api_key: str) -> list[Any]:
@@ -202,6 +205,13 @@ class DiscordBridgeChannelMessagesView(DiscordBridgeBaseView):
                 status_code=HTTPStatus.BAD_GATEWAY,
             )
 
+        if messages:
+            apply_message_summary(runtime.guild_state, messages[-1])
+            async_dispatcher_send(
+                self.hass,
+                channel_state_signal(runtime.entry_id, parsed_channel_id),
+            )
+
         return self.json(messages)
 
     async def post(self, request: web.Request, channel_id: str) -> web.Response:
@@ -251,6 +261,12 @@ class DiscordBridgeChannelMessagesView(DiscordBridgeBaseView):
                 "Failed to reach Discord.",
                 status_code=HTTPStatus.BAD_GATEWAY,
             )
+
+        apply_message_summary(runtime.guild_state, sent_message)
+        async_dispatcher_send(
+            self.hass,
+            channel_state_signal(runtime.entry_id, parsed_channel_id),
+        )
 
         return self.json(sent_message, status_code=HTTPStatus.CREATED)
 

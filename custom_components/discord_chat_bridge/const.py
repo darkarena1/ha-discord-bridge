@@ -18,5 +18,7 @@ OPTION_RECENT_MESSAGE_LIMIT = "recent_message_limit"
 CHANNEL_KIND_TEXT = "text_channel"
 CHANNEL_KIND_THREAD = "thread"
 
+SIGNAL_CHANNEL_STATE_UPDATED = "discord_chat_bridge_channel_state_updated"
+
 DEFAULT_RECENT_MESSAGE_LIMIT = 20
 MAX_RECENT_MESSAGE_LIMIT = 50

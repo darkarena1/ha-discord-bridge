@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from homeassistant.util import dt as dt_util
+
 from .const import OPTION_CHANNELS
 from .discord_api import DiscordChannelDescription
 
@@ -76,3 +78,17 @@ def build_guild_state(
         guild_name=guild_name,
         channels=channels,
     )
+
+
+def apply_message_summary(guild_state: GuildState, message: dict) -> None:
+    channel_id = int(message["channel_id"])
+    channel = guild_state.channels.get(channel_id)
+    if channel is None:
+        return
+
+    content = (message.get("content") or "").strip()
+    if not content and message.get("attachments"):
+        content = "<attachment only>"
+
+    channel.last_message_preview = content or "<no text>"
+    channel.last_message_at = dt_util.parse_datetime(message["created_at"])
