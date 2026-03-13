@@ -62,6 +62,13 @@ def _serialize_channel(runtime: Any, channel_state: Any) -> dict[str, Any]:
             if channel_state.last_message_at is not None
             else None
         ),
+        "recent_message_cache_count": len(channel_state.recent_messages),
+        "pinned_message_cache_count": len(channel_state.pinned_messages),
+        "pinned_messages_refreshed_at": (
+            channel_state.pinned_messages_refreshed_at.isoformat()
+            if channel_state.pinned_messages_refreshed_at is not None
+            else None
+        ),
     }
 
 
@@ -70,6 +77,13 @@ def _extract_api_key(request: web.Request) -> str | None:
     if not value:
         return None
     return value.strip()
+
+
+def _should_refresh(request: web.Request) -> bool:
+    value = request.query.get("refresh")
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class DiscordBridgeBaseView(http.HomeAssistantView):
@@ -193,13 +207,14 @@ class DiscordBridgeChannelMessagesView(DiscordBridgeBaseView):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
 
-        cached_messages = get_cached_recent_messages(
-            runtime.guild_state,
-            parsed_channel_id,
-            limit=limit_value,
-        )
-        if cached_messages is not None:
-            return self.json(cached_messages)
+        if not _should_refresh(request):
+            cached_messages = get_cached_recent_messages(
+                runtime.guild_state,
+                parsed_channel_id,
+                limit=limit_value,
+            )
+            if cached_messages is not None:
+                return self.json(cached_messages)
 
         session = async_get_clientsession(self.hass)
         try:
@@ -316,12 +331,13 @@ class DiscordBridgePinnedMessagesView(DiscordBridgeBaseView):
                 status_code=HTTPStatus.FORBIDDEN,
             )
 
-        cached_messages = get_cached_pinned_messages(
-            runtime.guild_state,
-            parsed_channel_id,
-        )
-        if cached_messages is not None:
-            return self.json(cached_messages)
+        if not _should_refresh(request):
+            cached_messages = get_cached_pinned_messages(
+                runtime.guild_state,
+                parsed_channel_id,
+            )
+            if cached_messages is not None:
+                return self.json(cached_messages)
 
         session = async_get_clientsession(self.hass)
         try:

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from custom_components.discord_chat_bridge.api import (
     _matching_runtimes_for_api_key,
     _runtime_for_channel,
     _serialize_channel,
+    _should_refresh,
 )
 from custom_components.discord_chat_bridge.coordinator import ChannelState, GuildState
 
@@ -88,3 +90,38 @@ def test_serialize_channel_includes_archived_flag() -> None:
 
     assert result["archived"] is True
     assert result["parent_channel_id"] == 50
+
+
+def test_serialize_channel_includes_cache_metadata() -> None:
+    runtime = FakeRuntime(
+        guild_id=1,
+        guild_name="A",
+        api_key="key-a",
+        guild_state=GuildState(guild_id=1),
+    )
+    channel_state = ChannelState(
+        channel_id=100,
+        name="general",
+        kind="text_channel",
+        recent_messages=[{"message_id": 1}, {"message_id": 2}],
+        pinned_messages=[{"message_id": 10}],
+        pinned_messages_refreshed_at=datetime(2026, 3, 13, 12, 0, tzinfo=UTC),
+    )
+
+    result = _serialize_channel(runtime, channel_state)
+
+    assert result["recent_message_cache_count"] == 2
+    assert result["pinned_message_cache_count"] == 1
+    assert result["pinned_messages_refreshed_at"] == "2026-03-13T12:00:00+00:00"
+
+
+def test_should_refresh_parses_truthy_values() -> None:
+    class FakeRequest:
+        def __init__(self, query: dict[str, str]) -> None:
+            self.query = query
+
+    assert _should_refresh(FakeRequest({"refresh": "true"})) is True
+    assert _should_refresh(FakeRequest({"refresh": "1"})) is True
+    assert _should_refresh(FakeRequest({"refresh": "yes"})) is True
+    assert _should_refresh(FakeRequest({})) is False
+    assert _should_refresh(FakeRequest({"refresh": "false"})) is False
