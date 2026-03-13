@@ -6,8 +6,9 @@ from dataclasses import dataclass, field
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import async_register_views
@@ -35,6 +36,14 @@ from .gateway import DiscordGatewayHandle, async_start_gateway, async_stop_gatew
 
 type DiscordChatBridgeConfigEntry = ConfigEntry
 PLATFORMS = ["binary_sensor", "sensor", "text", "button", "notify"]
+ENTITY_UNIQUE_SUFFIXES = (
+    "active",
+    "last_message",
+    "last_message_at",
+    "draft",
+    "send_draft",
+    "notify",
+)
 
 
 def _parse_guild_id_filter(value: object | None) -> int | None:
@@ -128,6 +137,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
         discovered_channels=tuple(discovered_channels),
     )
     hass.data[DOMAIN][entry.entry_id] = runtime
+    async_cleanup_stale_entities(hass, entry, runtime)
 
     updated_data = {
         **entry.data,
@@ -188,3 +198,25 @@ def _make_refresh_discovery_handler(
             await async_schedule_discovery_refresh(hass, entry, runtime, immediate=True)
 
     return _handler
+
+
+@callback
+def async_cleanup_stale_entities(
+    hass: HomeAssistant,
+    entry: DiscordChatBridgeConfigEntry,
+    runtime: DiscordBridgeRuntimeData,
+) -> None:
+    registry = er.async_get(hass)
+    expected_unique_ids = {
+        f"{runtime.guild_id}_{channel_state.channel_id}_{suffix}"
+        for channel_state in runtime.guild_state.channels.values()
+        if channel_state.enabled
+        for suffix in ENTITY_UNIQUE_SUFFIXES
+    }
+
+    for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if registry_entry.platform != DOMAIN:
+            continue
+        if registry_entry.unique_id in expected_unique_ids:
+            continue
+        registry.async_remove(registry_entry.entity_id)

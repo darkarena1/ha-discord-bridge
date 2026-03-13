@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import entity_registry as er
 
 import custom_components.discord_chat_bridge as integration
 from custom_components.discord_chat_bridge.const import (
@@ -138,6 +139,28 @@ class FakeHomeAssistant:
         return asyncio.create_task(coro, name=name)
 
 
+class FakeRegistryEntry:
+    def __init__(
+        self,
+        *,
+        entity_id: str,
+        unique_id: str,
+        platform: str = DOMAIN,
+    ) -> None:
+        self.entity_id = entity_id
+        self.unique_id = unique_id
+        self.platform = platform
+
+
+class FakeEntityRegistry:
+    def __init__(self, entries: list[FakeRegistryEntry]) -> None:
+        self.entries = entries
+        self.removed: list[str] = []
+
+    def async_remove(self, entity_id: str) -> None:
+        self.removed.append(entity_id)
+
+
 @pytest.mark.asyncio
 async def test_async_setup_registers_views_and_service_once(
     monkeypatch: pytest.MonkeyPatch,
@@ -181,6 +204,7 @@ async def test_async_setup_entry_bootstraps_runtime_and_platforms(
         ),
     ]
     gateway_handle = object()
+    fake_registry = FakeEntityRegistry([])
 
     monkeypatch.setattr(integration, "async_get_clientsession", lambda hass: object())
     monkeypatch.setattr(
@@ -198,6 +222,8 @@ async def test_async_setup_entry_bootstraps_runtime_and_platforms(
         "async_start_gateway",
         AsyncMock(return_value=gateway_handle),
     )
+    monkeypatch.setattr(er, "async_get", lambda hass: fake_registry)
+    monkeypatch.setattr(er, "async_entries_for_config_entry", lambda registry, entry_id: [])
 
     assert await integration.async_setup_entry(hass, entry) is True
 
@@ -384,3 +410,77 @@ async def test_refresh_discovery_service_handler_ignores_invalid_guild_id(
     await handler(SimpleNamespace(data={CONF_GUILD_ID: "not-a-number"}))
 
     schedule_refresh.assert_not_awaited()
+
+
+def test_async_cleanup_stale_entities_removes_disabled_channel_entities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass = FakeHomeAssistant()
+    entry = FakeEntry()
+    runtime = integration.DiscordBridgeRuntimeData(
+        entry_id=entry.entry_id,
+        guild_id=1234,
+        guild_name="KCBN",
+        bot_user_id=42,
+        bot_username="KillBot",
+        api_key="api-key",
+        entry_data=entry.data,
+        guild_state=build_guild_state(
+            1234,
+            "KCBN",
+            {
+                "channels": {
+                    "100": {
+                        "name": "enabled-channel",
+                        "kind": "text_channel",
+                        "enabled": True,
+                        "allow_posting": False,
+                        "include_in_api": False,
+                    },
+                    "200": {
+                        "name": "disabled-channel",
+                        "kind": "text_channel",
+                        "enabled": False,
+                        "allow_posting": False,
+                        "include_in_api": False,
+                    },
+                }
+            },
+        ),
+        discovered_channels=(),
+    )
+    fake_registry = FakeEntityRegistry(
+        [
+            FakeRegistryEntry(
+                entity_id="sensor.enabled_channel_last_message",
+                unique_id="1234_100_last_message",
+            ),
+            FakeRegistryEntry(
+                entity_id="sensor.disabled_channel_last_message",
+                unique_id="1234_200_last_message",
+            ),
+            FakeRegistryEntry(
+                entity_id="text.disabled_channel_draft",
+                unique_id="1234_200_draft",
+            ),
+            FakeRegistryEntry(
+                entity_id="sensor.other_platform",
+                unique_id="1234_200_last_message",
+                platform="other_integration",
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(er, "async_get", lambda hass: fake_registry)
+    monkeypatch.setattr(
+        er,
+        "async_entries_for_config_entry",
+        lambda registry, entry_id: list(fake_registry.entries),
+    )
+
+    integration.async_cleanup_stale_entities(hass, entry, runtime)
+
+    assert fake_registry.removed == [
+        "sensor.disabled_channel_last_message",
+        "text.disabled_channel_draft",
+    ]
