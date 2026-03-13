@@ -9,7 +9,7 @@ from homeassistant.helpers import http
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import API_HEADER, CONF_BOT_TOKEN, DOMAIN
+from .const import API_HEADER, CONF_BOT_TOKEN, DOMAIN, FRONTEND_API_VERSION
 from .coordinator import (
     cache_pinned_messages,
     cache_recent_message,
@@ -419,6 +419,33 @@ class DiscordBridgeFrontendBaseView(http.HomeAssistantView):
         return runtime
 
 
+class DiscordBridgeFrontendInfoView(DiscordBridgeFrontendBaseView):
+    url = "/api/discord_chat_bridge/frontend/info"
+    name = "api:discord_chat_bridge:frontend_info"
+
+    async def get(self, request: web.Request) -> web.Response:
+        guild_count = 0
+        enabled_channel_count = 0
+        for runtime in self.hass.data.get(DOMAIN, {}).values():
+            if not hasattr(runtime, "guild_state"):
+                continue
+            guild_count += 1
+            enabled_channel_count += sum(
+                1
+                for channel_state in runtime.guild_state.channels.values()
+                if channel_state.enabled
+            )
+
+        return self.json(
+            {
+                "domain": DOMAIN,
+                "frontend_api_version": FRONTEND_API_VERSION,
+                "guild_count": guild_count,
+                "enabled_channel_count": enabled_channel_count,
+            }
+        )
+
+
 class DiscordBridgeFrontendChannelsView(DiscordBridgeFrontendBaseView):
     url = "/api/discord_chat_bridge/frontend/channels"
     name = "api:discord_chat_bridge:frontend_channels"
@@ -591,6 +618,7 @@ def async_register_views(hass: HomeAssistant) -> None:
     hass.http.register_view(DiscordBridgeChannelDetailView(hass))
     hass.http.register_view(DiscordBridgeChannelMessagesView(hass))
     hass.http.register_view(DiscordBridgePinnedMessagesView(hass))
+    hass.http.register_view(DiscordBridgeFrontendInfoView(hass))
     hass.http.register_view(DiscordBridgeFrontendChannelsView(hass))
     hass.http.register_view(DiscordBridgeFrontendChannelDetailView(hass))
     hass.http.register_view(DiscordBridgeFrontendChannelMessagesView(hass))

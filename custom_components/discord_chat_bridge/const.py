@@ -1,5 +1,6 @@
 DOMAIN = "discord_chat_bridge"
 API_HEADER = "X-API-Key"
+FRONTEND_API_VERSION = 1
 
 CONF_API_KEY = "api_key"
 CONF_BOT_TOKEN = "bot_token"

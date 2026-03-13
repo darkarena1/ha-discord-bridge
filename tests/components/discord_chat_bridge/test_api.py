@@ -12,13 +12,14 @@ from custom_components.discord_chat_bridge.api import (
     DiscordBridgeFrontendChannelDetailView,
     DiscordBridgeFrontendChannelMessagesView,
     DiscordBridgeFrontendChannelsView,
+    DiscordBridgeFrontendInfoView,
     DiscordBridgePinnedMessagesView,
     _matching_runtimes_for_api_key,
     _runtime_for_channel,
     _serialize_channel,
     _should_refresh,
 )
-from custom_components.discord_chat_bridge.const import CONF_BOT_TOKEN
+from custom_components.discord_chat_bridge.const import CONF_BOT_TOKEN, FRONTEND_API_VERSION
 from custom_components.discord_chat_bridge.coordinator import ChannelState, GuildState
 
 
@@ -260,6 +261,46 @@ async def test_frontend_channels_view_returns_enabled_channels_without_api_key()
     assert json.loads(response.text) == _json_shape(
         [_serialize_channel(runtime, runtime.guild_state.channels[100])]
     )
+
+
+async def test_frontend_info_view_returns_api_version_and_counts() -> None:
+    runtime = FakeRuntime(
+        entry_id="entry-1",
+        guild_id=1,
+        guild_name="A",
+        api_key="key-a",
+        entry_data={CONF_BOT_TOKEN: "token-a"},
+        guild_state=GuildState(
+            guild_id=1,
+            channels={
+                100: ChannelState(
+                    channel_id=100,
+                    name="general",
+                    kind="text_channel",
+                    enabled=True,
+                ),
+                200: ChannelState(
+                    channel_id=200,
+                    name="hidden",
+                    kind="text_channel",
+                    enabled=False,
+                ),
+            },
+        ),
+    )
+    hass = FakeHass({"entry-1": runtime})
+    view = DiscordBridgeFrontendInfoView(hass)
+    request = make_mocked_request("GET", "/api/discord_chat_bridge/frontend/info")
+
+    response = await view.get(request)
+
+    assert response.status == 200
+    assert json.loads(response.text) == {
+        "domain": "discord_chat_bridge",
+        "frontend_api_version": FRONTEND_API_VERSION,
+        "guild_count": 1,
+        "enabled_channel_count": 1,
+    }
 
 
 async def test_frontend_channel_detail_view_returns_enabled_channel_payload() -> None:
