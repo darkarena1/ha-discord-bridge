@@ -21,7 +21,7 @@ Implemented so far:
 - Discord credential validation and guild bootstrap
 - channel and active-thread discovery with per-channel options
 - authenticated bridge API endpoints for channels, messages, pins, and posting
-- channel entities for latest message, draft, send-draft, and notify
+- channel entities for status, latest message, draft, send-draft, and notify
 - live Discord gateway updates for message events on enabled channels
 - discovery refresh support for newly created channels and threads
 - configured threads remain tracked if they later become archived

@@ -19,9 +19,34 @@ async def async_setup_entry(
     for channel_state in runtime.guild_state.channels.values():
         if not channel_state.enabled:
             continue
+        entities.append(DiscordChannelStatusSensor(runtime, channel_state))
         entities.append(DiscordLastMessageSensor(runtime, channel_state))
         entities.append(DiscordLastMessageAtSensor(runtime, channel_state))
     async_add_entities(entities)
+
+
+class DiscordChannelStatusSensor(DiscordChatBridgeEntity, SensorEntity):
+    _attr_should_poll = False
+
+    def __init__(
+        self, runtime: DiscordBridgeRuntimeData, channel_state
+    ) -> None:
+        super().__init__(
+            runtime,
+            channel_state,
+            unique_suffix="status",
+            entity_name="status",
+        )
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> str:
+        if self.channel_state.archived:
+            return "archived"
+        return "active"
 
 
 class DiscordLastMessageSensor(DiscordChatBridgeEntity, SensorEntity):

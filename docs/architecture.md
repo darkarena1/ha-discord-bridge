@@ -49,6 +49,8 @@ Per enabled channel, plan to create:
 
 - `notify.<channel_slug>`
   - send a message to the channel
+- `sensor.<channel_slug>_status`
+  - `active` or `archived`
 - `sensor.<channel_slug>_last_message`
   - last message preview
 - `sensor.<channel_slug>_last_message_at`
