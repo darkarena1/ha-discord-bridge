@@ -122,6 +122,7 @@ def test_serialize_channel_includes_cache_metadata() -> None:
         channel_id=100,
         name="general",
         kind="text_channel",
+        last_message_author="Storyteller",
         recent_messages=[{"message_id": 1}, {"message_id": 2}],
         pinned_messages=[{"message_id": 10}],
         pinned_messages_refreshed_at=datetime(2026, 3, 13, 12, 0, tzinfo=UTC),
@@ -132,6 +133,7 @@ def test_serialize_channel_includes_cache_metadata() -> None:
     assert result["recent_message_cache_count"] == 2
     assert result["pinned_message_cache_count"] == 1
     assert result["pinned_messages_refreshed_at"] == "2026-03-13T12:00:00+00:00"
+    assert result["last_message_author"] == "Storyteller"
 
 
 def test_should_refresh_parses_truthy_values() -> None:

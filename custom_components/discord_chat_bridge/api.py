@@ -60,6 +60,7 @@ def _serialize_channel(runtime: Any, channel_state: Any) -> dict[str, Any]:
         "allow_posting": channel_state.posting_enabled,
         "include_in_api": channel_state.api_enabled,
         "last_message_preview": channel_state.last_message_preview,
+        "last_message_author": channel_state.last_message_author,
         "last_message_at": (
             channel_state.last_message_at.isoformat()
             if channel_state.last_message_at is not None

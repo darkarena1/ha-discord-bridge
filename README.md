@@ -35,8 +35,10 @@ Implemented:
 
 - `custom_components/discord_chat_bridge/`: Home Assistant integration
 - `docs/architecture.md`: architecture, entities, API, and roadmap
+- `docs/chatgpt_actions.md`: Custom GPT Actions setup guide
 - `config/`: local Home Assistant configuration for development
 - `tests/`: integration tests
+- `openapi.yaml`: OpenAPI schema for Custom GPT Actions
 
 ## Installation
 
@@ -181,6 +183,20 @@ Single-channel metadata is available at:
 - `/api/discord_chat_bridge/channels/{channel_id}`
 
 This returns the same metadata shape as the channel list, scoped to one API-enabled channel.
+
+## ChatGPT Actions
+
+The repo now includes an OpenAPI schema for Custom GPT Actions:
+
+- [openapi.yaml](/Users/scottobryan/Source/ha-discord-bridge/openapi.yaml#L1)
+
+Setup guide:
+
+- [chatgpt_actions.md](/Users/scottobryan/Source/ha-discord-bridge/docs/chatgpt_actions.md#L1)
+
+Use API key auth with:
+- header: `X-API-Key`
+- value: your bridge API key
 
 ## Home Assistant Services
 

@@ -1,0 +1,376 @@
+openapi: 3.1.0
+info:
+  title: Discord Chat Bridge API
+  version: 0.2.0
+  description: >
+    Authenticated Home Assistant bridge for selected Discord channels and threads.
+    Import this schema into a Custom GPT Action and configure API key auth with the
+    `X-API-Key` header.
+servers:
+  - url: https://YOUR_HOME_ASSISTANT_URL
+    description: Replace with your Home Assistant external HTTPS URL
+security:
+  - BridgeApiKey: []
+tags:
+  - name: Bridge
+  - name: Channels
+paths:
+  /api/discord_chat_bridge/health:
+    get:
+      operationId: getBridgeHealth
+      tags: [Bridge]
+      summary: Check bridge health and visible guilds
+      responses:
+        "200":
+          description: Bridge health and guild visibility
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+  /api/discord_chat_bridge/channels:
+    get:
+      operationId: listDiscordChannels
+      tags: [Channels]
+      summary: List API-enabled Discord channels and threads
+      responses:
+        "200":
+          description: API-enabled channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Channel"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+  /api/discord_chat_bridge/channels/{channel_id}:
+    get:
+      operationId: getDiscordChannel
+      tags: [Channels]
+      summary: Get metadata for one API-enabled Discord channel
+      parameters:
+        - $ref: "#/components/parameters/ChannelId"
+      responses:
+        "200":
+          description: Channel metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+  /api/discord_chat_bridge/channels/{channel_id}/messages:
+    get:
+      operationId: getDiscordChannelMessages
+      tags: [Channels]
+      summary: Get recent messages for one API-enabled Discord channel
+      parameters:
+        - $ref: "#/components/parameters/ChannelId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Refresh"
+      responses:
+        "200":
+          description: Recent messages, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "502":
+          $ref: "#/components/responses/BadGatewayError"
+    post:
+      operationId: postDiscordChannelMessage
+      tags: [Channels]
+      summary: Post a new message into a Discord channel or thread
+      parameters:
+        - $ref: "#/components/parameters/ChannelId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostMessageRequest"
+      responses:
+        "201":
+          description: The sent message summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "502":
+          $ref: "#/components/responses/BadGatewayError"
+  /api/discord_chat_bridge/channels/{channel_id}/pins:
+    get:
+      operationId: getDiscordChannelPins
+      tags: [Channels]
+      summary: Get pinned messages for one API-enabled Discord channel
+      parameters:
+        - $ref: "#/components/parameters/ChannelId"
+        - $ref: "#/components/parameters/Refresh"
+      responses:
+        "200":
+          description: Pinned messages, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequestError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "502":
+          $ref: "#/components/responses/BadGatewayError"
+components:
+  securitySchemes:
+    BridgeApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  parameters:
+    ChannelId:
+      name: channel_id
+      in: path
+      required: true
+      description: Discord channel or thread ID
+      schema:
+        type: string
+        pattern: "^[0-9]+$"
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Number of recent messages to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    Refresh:
+      name: refresh
+      in: query
+      required: false
+      description: Bypass cache and fetch fresh data from Discord
+      schema:
+        oneOf:
+          - type: boolean
+          - type: string
+            enum: ["1", "true", "yes", "on", "false", "0", "off", "no"]
+  responses:
+    BadRequestError:
+      description: Invalid request input
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnauthorizedError:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ForbiddenError:
+      description: Channel access or posting is not allowed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFoundError:
+      description: Channel not found for this API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    BadGatewayError:
+      description: Discord could not be reached
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, guilds]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        guilds:
+          type: array
+          items:
+            type: object
+            required: [guild_id, guild_name, bot_user_id, bot_username]
+            properties:
+              guild_id:
+                type: integer
+              guild_name:
+                type: string
+              bot_user_id:
+                type: integer
+              bot_username:
+                type: string
+    Channel:
+      type: object
+      required:
+        - guild_id
+        - guild_name
+        - channel_id
+        - name
+        - kind
+        - archived
+        - enabled
+        - allow_posting
+        - include_in_api
+        - recent_message_cache_count
+        - pinned_message_cache_count
+      properties:
+        guild_id:
+          type: integer
+        guild_name:
+          type: string
+        channel_id:
+          type: integer
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [text_channel, thread]
+        parent_channel_id:
+          type:
+            - integer
+            - "null"
+        parent_channel_name:
+          type:
+            - string
+            - "null"
+        category_id:
+          type:
+            - integer
+            - "null"
+        category_name:
+          type:
+            - string
+            - "null"
+        archived:
+          type: boolean
+        enabled:
+          type: boolean
+        allow_posting:
+          type: boolean
+        include_in_api:
+          type: boolean
+        last_message_preview:
+          type:
+            - string
+            - "null"
+        last_message_author:
+          type:
+            - string
+            - "null"
+        last_message_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        recent_message_cache_count:
+          type: integer
+        pinned_message_cache_count:
+          type: integer
+        pinned_messages_refreshed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+    Message:
+      type: object
+      required:
+        - message_id
+        - channel_id
+        - author_id
+        - author_name
+        - content
+        - created_at
+        - jump_url
+        - attachments
+      properties:
+        message_id:
+          type: integer
+        channel_id:
+          type: integer
+        author_id:
+          type: integer
+        author_name:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        jump_url:
+          type: string
+          format: uri
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+    Attachment:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        filename:
+          type:
+            - string
+            - "null"
+        url:
+          type:
+            - string
+            - "null"
+          format: uri
+        content_type:
+          type:
+            - string
+            - "null"
+    PostMessageRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
