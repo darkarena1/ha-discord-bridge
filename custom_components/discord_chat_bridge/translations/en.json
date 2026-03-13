@@ -22,10 +22,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Discord bridge options",
+        "title": "Choose enabled channels",
         "data": {
           "recent_message_limit": "Default recent-message limit",
-          "enabled_channels": "Enabled channels",
+          "enabled_action": "Bulk channel action",
+          "enabled_channels": "Enabled channels"
+        }
+      },
+      "permissions": {
+        "title": "Choose channel permissions",
+        "data": {
           "posting_channels": "Channels allowed to post",
           "api_channels": "Channels exposed through the bridge API"
         }
