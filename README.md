@@ -20,8 +20,8 @@ Implemented:
 - Discord credential validation and guild bootstrap
 - text-channel and active-thread discovery
 - category-aware options flow with searchable channel selection
-- per-channel enablement with opt-out posting and API restrictions
-- channel entities for active status, latest message, latest message author, timestamp, draft, send-draft, and notify
+- per-channel enablement with config switches for posting and API access
+- channel entities for active status, latest message, latest message author, timestamp, posting enabled, API enabled, draft, send-draft, and notify
 - live Discord gateway updates for enabled channels
 - startup preload of recent messages for enabled channels so entity summaries are populated immediately
 - authenticated bridge API endpoints for health, channels, channel detail, messages, pins, and posting
@@ -134,15 +134,15 @@ Recommended if you want thread behavior to be reliable:
 3. Open the integration options flow.
 4. Filter by category or channel kind if needed.
 5. Enable only the channels or threads you want managed.
-6. In the second step, optionally choose enabled channels where you want to:
-   - disable posting
-   - disable bridge API access
-7. Save options and verify the entities created for those channels.
+6. Save options and verify the entities created for those channels.
+7. Use the per-channel config switches on the device page to enable or disable:
+   - posting
+   - bridge API access
 
 Notes:
 - all discovered channels start disabled
 - enabled channels default to both posting and bridge API access
-- posting and API restrictions are opt-out for enabled channels
+- posting and API access can be changed later through config switch entities
 - threads are labeled as `parent / thread` in the selector
 
 ## External API
@@ -216,6 +216,9 @@ These only operate on channels already enabled in the integration.
 
 Entity creation rules:
 - enabled channels always get read-oriented entities
+- enabled channels always get:
+  - `switch.<channel>_posting_enabled`
+  - `switch.<channel>_api_enabled`
 - only posting-enabled channels get:
   - `text.<channel>_draft`
   - `button.<channel>_send_draft`
@@ -243,6 +246,8 @@ Use this checklist in a real Home Assistant instance with your Discord bot:
    - `sensor.<channel>_last_message`
    - `sensor.<channel>_last_message_author`
    - `sensor.<channel>_last_message_at`
+   - `switch.<channel>_posting_enabled`
+   - `switch.<channel>_api_enabled`
    - `text.<channel>_draft`
    - `button.<channel>_send_draft`
    - `notify.<channel>`

@@ -29,8 +29,6 @@ from .discord_api import (
 )
 
 FORM_ENABLED_CHANNELS = "enabled_channels"
-FORM_POSTING_DISABLED_CHANNELS = "posting_disabled_channels"
-FORM_API_DISABLED_CHANNELS = "api_disabled_channels"
 FORM_ENABLED_ACTION = "enabled_action"
 FORM_CATEGORY_FILTER = "category_filter"
 FORM_CHANNEL_KIND_FILTER = "channel_kind_filter"
@@ -222,42 +220,30 @@ def _matches_category_filter(channel_data: dict, category_filter: str) -> bool:
     return str(category_id) == category_filter
 
 
-def _merge_channel_flag_updates(
+def _merge_enabled_channel_updates(
     channel_map: dict[str, dict],
     *,
     enabled_channels: list[str],
-    posting_disabled_channels: list[str],
-    api_disabled_channels: list[str],
 ) -> dict[str, dict]:
     enabled_ids = set(enabled_channels)
-    posting_disabled_ids = set(posting_disabled_channels) & enabled_ids
-    api_disabled_ids = set(api_disabled_channels) & enabled_ids
 
     return {
         channel_id: {
             **channel_data,
             "enabled": channel_id in enabled_ids,
-            "allow_posting": channel_id in enabled_ids and channel_id not in posting_disabled_ids,
-            "include_in_api": channel_id in enabled_ids and channel_id not in api_disabled_ids,
+            "allow_posting": (
+                bool(channel_data.get("allow_posting", True))
+                if channel_id in enabled_ids and channel_data.get("enabled", False)
+                else channel_id in enabled_ids
+            ),
+            "include_in_api": (
+                bool(channel_data.get("include_in_api", True))
+                if channel_id in enabled_ids and channel_data.get("enabled", False)
+                else channel_id in enabled_ids
+            ),
         }
         for channel_id, channel_data in channel_map.items()
     }
-
-
-def _default_disabled_channels(
-    channel_map: dict[str, dict],
-    *,
-    enabled_channels: list[str],
-    capability_key: str,
-) -> list[str]:
-    enabled_ids = set(enabled_channels)
-    return [
-        channel_id
-        for channel_id, channel_data in channel_map.items()
-        if channel_id in enabled_ids
-        and channel_data.get("enabled", False)
-        and not channel_data.get(capability_key, True)
-    ]
 
 
 class DiscordChatBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -427,17 +413,24 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                 return self.async_create_entry(
                     title="",
                     data={
-                        OPTION_CHANNELS: _merge_channel_flag_updates(
+                        OPTION_CHANNELS: _merge_enabled_channel_updates(
                             channel_map,
                             enabled_channels=[],
-                            posting_disabled_channels=[],
-                            api_disabled_channels=[],
                         ),
                         OPTION_RECENT_MESSAGE_LIMIT: self._recent_message_limit,
                     },
                 )
 
-            return await self.async_step_permissions()
+            return self.async_create_entry(
+                title="",
+                data={
+                    OPTION_CHANNELS: _merge_enabled_channel_updates(
+                        channel_map,
+                        enabled_channels=self._enabled_channels,
+                    ),
+                    OPTION_RECENT_MESSAGE_LIMIT: self._recent_message_limit,
+                },
+            )
 
         channel_options = _channel_selector_options(channel_map, include_ids=filtered_ids)
         schema = vol.Schema(
@@ -489,61 +482,3 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
             }
         )
         return self.async_show_form(step_id="enabled", data_schema=schema)
-
-    async def async_step_permissions(self, user_input: dict | None = None) -> FlowResult:
-        channel_map = self.config_entry.options.get(OPTION_CHANNELS, {})
-        enabled_channels = self._enabled_channels or [
-            channel_id
-            for channel_id, channel_data in channel_map.items()
-            if channel_data.get("enabled", False)
-        ]
-
-        if user_input is not None:
-            return self.async_create_entry(
-                title="",
-                data={
-                    OPTION_CHANNELS: _merge_channel_flag_updates(
-                        channel_map,
-                        enabled_channels=enabled_channels,
-                        posting_disabled_channels=user_input[FORM_POSTING_DISABLED_CHANNELS],
-                        api_disabled_channels=user_input[FORM_API_DISABLED_CHANNELS],
-                    ),
-                    OPTION_RECENT_MESSAGE_LIMIT: self._recent_message_limit,
-                },
-            )
-
-        enabled_channel_ids = set(enabled_channels)
-        channel_options = _channel_selector_options(channel_map, include_ids=enabled_channel_ids)
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    FORM_POSTING_DISABLED_CHANNELS,
-                    default=_default_disabled_channels(
-                        channel_map,
-                        enabled_channels=enabled_channels,
-                        capability_key="allow_posting",
-                    ),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=channel_options,
-                        multiple=True,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Required(
-                    FORM_API_DISABLED_CHANNELS,
-                    default=_default_disabled_channels(
-                        channel_map,
-                        enabled_channels=enabled_channels,
-                        capability_key="include_in_api",
-                    ),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=channel_options,
-                        multiple=True,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-            }
-        )
-        return self.async_show_form(step_id="permissions", data_schema=schema)

@@ -23,10 +23,11 @@ Confirm the Discord bot has:
 4. Open the options flow and enable at least:
    - one text channel
    - one thread
-5. In the second options step:
-   - verify enabled channels default to posting and API access
-   - disable posting for one enabled channel
-   - disable API access for one enabled channel
+5. Save the options flow.
+6. On the device page, verify enabled channels default to posting and API access.
+7. Toggle one enabled channel to:
+   - disable posting
+   - disable API access
 
 ## Entity Validation
 
@@ -36,6 +37,8 @@ For each enabled channel, verify these entities exist:
 - `sensor.<channel>_last_message`
 - `sensor.<channel>_last_message_author`
 - `sensor.<channel>_last_message_at`
+- `switch.<channel>_posting_enabled`
+- `switch.<channel>_api_enabled`
 - `text.<channel>_draft`
 - `button.<channel>_send_draft`
 - `notify.<channel>`

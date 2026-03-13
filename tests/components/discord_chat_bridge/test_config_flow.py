@@ -11,9 +11,8 @@ from custom_components.discord_chat_bridge.config_flow import (
     EnabledAction,
     _category_selector_options,
     _channel_selector_options,
-    _default_disabled_channels,
     _filter_channel_ids,
-    _merge_channel_flag_updates,
+    _merge_enabled_channel_updates,
     _parse_guild_id,
     _resolve_enabled_channels,
 )
@@ -104,7 +103,7 @@ def test_channel_selector_options_can_filter_to_subset() -> None:
     ]
 
 
-def test_merge_channel_flag_updates_normalizes_posting_and_api_to_enabled_channels() -> None:
+def test_merge_enabled_channel_updates_normalizes_disabled_channels() -> None:
     channel_map = {
         "100": {
             "name": "general",
@@ -116,22 +115,21 @@ def test_merge_channel_flag_updates_normalizes_posting_and_api_to_enabled_channe
         },
     }
 
-    merged = _merge_channel_flag_updates(
+    merged = _merge_enabled_channel_updates(
         channel_map,
         enabled_channels=["100"],
-        posting_disabled_channels=[],
-        api_disabled_channels=["100", "200"],
     )
 
     assert merged["100"]["enabled"] is True
     assert merged["100"]["allow_posting"] is True
-    assert merged["100"]["include_in_api"] is False
+    assert merged["100"]["include_in_api"] is True
     assert merged["200"]["enabled"] is False
     assert merged["200"]["allow_posting"] is False
     assert merged["200"]["include_in_api"] is False
 
 
-def test_merge_channel_flag_updates_defaults_enabled_channels_to_posting_and_api() -> None:
+def test_merge_enabled_channel_updates_defaults_newly_enabled_channels(
+) -> None:
     channel_map = {
         "100": {
             "name": "general",
@@ -143,47 +141,45 @@ def test_merge_channel_flag_updates_defaults_enabled_channels_to_posting_and_api
         },
     }
 
-    merged = _merge_channel_flag_updates(
+    merged = _merge_enabled_channel_updates(
         channel_map,
         enabled_channels=["100", "200"],
-        posting_disabled_channels=["200"],
-        api_disabled_channels=[],
     )
 
     assert merged["100"]["allow_posting"] is True
     assert merged["100"]["include_in_api"] is True
-    assert merged["200"]["allow_posting"] is False
+    assert merged["200"]["allow_posting"] is True
     assert merged["200"]["include_in_api"] is True
 
 
-def test_default_disabled_channels_ignores_old_false_flags_for_newly_enabled_channels() -> None:
+def test_merge_enabled_channel_updates_preserves_existing_restrictions(
+) -> None:
     channel_map = {
         "100": {
             "name": "general",
             "kind": "text_channel",
-            "enabled": False,
+            "enabled": True,
             "allow_posting": False,
             "include_in_api": False,
         },
         "200": {
             "name": "ops-thread",
             "kind": "thread",
-            "enabled": True,
+            "enabled": False,
             "allow_posting": False,
             "include_in_api": False,
         },
     }
 
-    assert _default_disabled_channels(
+    merged = _merge_enabled_channel_updates(
         channel_map,
         enabled_channels=["100", "200"],
-        capability_key="allow_posting",
-    ) == ["200"]
-    assert _default_disabled_channels(
-        channel_map,
-        enabled_channels=["100", "200"],
-        capability_key="include_in_api",
-    ) == ["200"]
+    )
+
+    assert merged["100"]["allow_posting"] is False
+    assert merged["100"]["include_in_api"] is False
+    assert merged["200"]["allow_posting"] is True
+    assert merged["200"]["include_in_api"] is True
 
 
 def test_parse_guild_id_accepts_digit_strings() -> None:

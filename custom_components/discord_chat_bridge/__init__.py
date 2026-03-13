@@ -23,6 +23,7 @@ from .const import (
     ENTRY_DATA_BOT_USERNAME,
     ENTRY_DATA_GUILD_NAME,
     MAX_RECENT_MESSAGE_LIMIT,
+    OPTION_CHANNELS,
     OPTION_RECENT_MESSAGE_LIMIT,
     SERVICE_REFRESH_DISCOVERY,
     SERVICE_REFRESH_PINS,
@@ -50,12 +51,16 @@ from .entity import channel_state_signal
 from .gateway import DiscordGatewayHandle, async_start_gateway, async_stop_gateway
 
 type DiscordChatBridgeConfigEntry = ConfigEntry
-PLATFORMS = ["binary_sensor", "sensor", "text", "button", "notify"]
+PLATFORMS = ["binary_sensor", "sensor", "switch", "text", "button", "notify"]
 BASE_ENTITY_UNIQUE_SUFFIXES = (
     "active",
     "last_message",
     "last_message_author",
     "last_message_at",
+)
+CONFIG_ENTITY_UNIQUE_SUFFIXES = (
+    "posting_enabled",
+    "api_enabled",
 )
 POSTING_ENTITY_UNIQUE_SUFFIXES = (
     "draft",
@@ -441,6 +446,7 @@ def async_cleanup_stale_entities(
         if channel_state.enabled
         for suffix in (
             BASE_ENTITY_UNIQUE_SUFFIXES
+            + CONFIG_ENTITY_UNIQUE_SUFFIXES
             + (POSTING_ENTITY_UNIQUE_SUFFIXES if channel_state.posting_enabled else ())
         )
     }
@@ -451,3 +457,42 @@ def async_cleanup_stale_entities(
         if registry_entry.unique_id in expected_unique_ids:
             continue
         registry.async_remove(registry_entry.entity_id)
+
+
+@callback
+def async_update_channel_capability(
+    hass: HomeAssistant,
+    entry_id: str,
+    channel_id: int,
+    *,
+    capability_key: str,
+    enabled: bool,
+) -> None:
+    entry = hass.config_entries.async_get_entry(entry_id)
+    if entry is None:
+        return
+
+    channel_map = entry.options.get(OPTION_CHANNELS, {})
+    channel_id_str = str(channel_id)
+    channel_data = channel_map.get(channel_id_str)
+    if channel_data is None or not channel_data.get("enabled", False):
+        return
+
+    normalized_enabled = bool(enabled)
+    existing_value = bool(channel_data.get(capability_key, False))
+    if existing_value == normalized_enabled:
+        return
+
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            **entry.options,
+            OPTION_CHANNELS: {
+                **channel_map,
+                channel_id_str: {
+                    **channel_data,
+                    capability_key: normalized_enabled,
+                },
+            },
+        },
+    )

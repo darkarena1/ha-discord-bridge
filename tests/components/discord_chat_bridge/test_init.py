@@ -797,6 +797,10 @@ def test_async_cleanup_stale_entities_removes_disabled_channel_entities(
                 unique_id="1234_100_last_message",
             ),
             FakeRegistryEntry(
+                entity_id="switch.enabled_channel_posting_enabled",
+                unique_id="1234_100_posting_enabled",
+            ),
+            FakeRegistryEntry(
                 entity_id="sensor.disabled_channel_last_message",
                 unique_id="1234_200_last_message",
             ),
@@ -873,6 +877,14 @@ def test_async_cleanup_stale_entities_removes_posting_entities_for_read_only_cha
                 unique_id="1234_100_last_message_author",
             ),
             FakeRegistryEntry(
+                entity_id="switch.read_only_channel_posting_enabled",
+                unique_id="1234_100_posting_enabled",
+            ),
+            FakeRegistryEntry(
+                entity_id="switch.read_only_channel_api_enabled",
+                unique_id="1234_100_api_enabled",
+            ),
+            FakeRegistryEntry(
                 entity_id="text.read_only_channel_draft",
                 unique_id="1234_100_draft",
             ),
@@ -901,3 +913,33 @@ def test_async_cleanup_stale_entities_removes_posting_entities_for_read_only_cha
         "button.read_only_channel_send_draft",
         "notify.read_only_channel_notify",
     ]
+
+
+def test_async_update_channel_capability_updates_entry_options() -> None:
+    hass = FakeHomeAssistant()
+    entry = FakeEntry(
+        options={
+            "channels": {
+                "100": {
+                    "name": "briefing",
+                    "kind": "text_channel",
+                    "enabled": True,
+                    "allow_posting": True,
+                    "include_in_api": True,
+                }
+            }
+        }
+    )
+    hass.config_entries.entries_by_domain[DOMAIN] = [entry]
+
+    integration.async_update_channel_capability(
+        hass,
+        entry.entry_id,
+        100,
+        capability_key="allow_posting",
+        enabled=False,
+    )
+
+    assert entry.options["channels"]["100"]["allow_posting"] is False
+    assert entry.options["channels"]["100"]["include_in_api"] is True
+    assert hass.config_entries.updated_calls[-1]["options"] == entry.options

@@ -36,13 +36,6 @@
           "enabled_action": "Bulk channel action",
           "enabled_channels": "Enabled channels"
         }
-      },
-      "permissions": {
-        "title": "Optional channel restrictions",
-        "data": {
-          "posting_disabled_channels": "Disable posting for these enabled channels",
-          "api_disabled_channels": "Disable API access for these enabled channels"
-        }
       }
     }
   }
