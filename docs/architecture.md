@@ -137,15 +137,15 @@ Current behavior:
 - Home Assistant entities read latest-message state from the in-memory cache
 - the external API still reads messages and pins directly from Discord REST
 - gateway updates currently apply to already-discovered channels and threads
+- channel and thread lifecycle events trigger rediscovery refreshes
+- configured threads are preserved if they disappear from active discovery after archiving
 
 Planned additions:
 - recent-message ring buffer
 - pinned-message snapshot
-- dynamic channel/thread discovery from gateway events
 
 Initial implementation note:
 - channel and active-thread discovery is persisted in config entry options first
-- archived-thread discovery can remain optional behind the existing option flag
 - the gateway-backed live cache builds on top of the discovered channel map
 
 ## Options Flow
@@ -155,7 +155,6 @@ The options flow should manage:
 - posting enablement
 - API exposure enablement
 - recent-message default limit
-- whether archived threads are included
 
 ## Initial Roadmap
 

@@ -23,6 +23,8 @@ Implemented so far:
 - authenticated bridge API endpoints for channels, messages, pins, and posting
 - channel entities for latest message, draft, send-draft, and notify
 - live Discord gateway updates for message events on enabled channels
+- discovery refresh support for newly created channels and threads
+- configured threads remain tracked if they later become archived
 - architecture and API design docs
 - local Home Assistant config directory
 

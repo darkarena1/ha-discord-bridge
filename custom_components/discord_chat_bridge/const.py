@@ -12,13 +12,13 @@ ENTRY_DATA_BOT_USER_ID = "bot_user_id"
 ENTRY_DATA_BOT_USERNAME = "bot_username"
 
 OPTION_CHANNELS = "channels"
-OPTION_INCLUDE_ARCHIVED_THREADS = "include_archived_threads"
 OPTION_RECENT_MESSAGE_LIMIT = "recent_message_limit"
 
 CHANNEL_KIND_TEXT = "text_channel"
 CHANNEL_KIND_THREAD = "thread"
 
 SIGNAL_CHANNEL_STATE_UPDATED = "discord_chat_bridge_channel_state_updated"
+SERVICE_REFRESH_DISCOVERY = "refresh_discovery"
 
 DEFAULT_RECENT_MESSAGE_LIMIT = 20
 MAX_RECENT_MESSAGE_LIMIT = 50

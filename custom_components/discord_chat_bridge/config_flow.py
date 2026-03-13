@@ -17,7 +17,6 @@ from .const import (
     ENTRY_DATA_GUILD_NAME,
     MAX_RECENT_MESSAGE_LIMIT,
     OPTION_CHANNELS,
-    OPTION_INCLUDE_ARCHIVED_THREADS,
     OPTION_RECENT_MESSAGE_LIMIT,
 )
 from .discord_api import (
@@ -122,7 +121,6 @@ class DiscordChatBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     options={
                         OPTION_CHANNELS: {},
                         OPTION_RECENT_MESSAGE_LIMIT: DEFAULT_RECENT_MESSAGE_LIMIT,
-                        OPTION_INCLUDE_ARCHIVED_THREADS: False,
                     },
                 )
 
@@ -158,9 +156,6 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                         api_channels=user_input[FORM_API_CHANNELS],
                     ),
                     OPTION_RECENT_MESSAGE_LIMIT: user_input[OPTION_RECENT_MESSAGE_LIMIT],
-                    OPTION_INCLUDE_ARCHIVED_THREADS: user_input[
-                        OPTION_INCLUDE_ARCHIVED_THREADS
-                    ],
                 },
             )
 
@@ -174,10 +169,6 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                         DEFAULT_RECENT_MESSAGE_LIMIT,
                     ),
                 ): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_RECENT_MESSAGE_LIMIT)),
-                vol.Required(
-                    OPTION_INCLUDE_ARCHIVED_THREADS,
-                    default=self.config_entry.options.get(OPTION_INCLUDE_ARCHIVED_THREADS, False),
-                ): bool,
                 vol.Required(
                     FORM_ENABLED_CHANNELS,
                     default=[

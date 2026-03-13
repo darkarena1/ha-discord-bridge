@@ -175,8 +175,6 @@ async def async_fetch_discoverable_channels(
     session: ClientSession,
     bot_token: str,
     guild_id: int,
-    *,
-    include_archived_threads: bool = False,
 ) -> list[DiscordChannelDescription]:
     channels_status, channels_payload = await _discord_get(
         session,
@@ -211,8 +209,6 @@ async def async_fetch_discoverable_channels(
         channel = _channel_from_payload(payload)
         if channel is None:
             continue
-        if channel.archived and not include_archived_threads:
-            continue
         discovered[channel.channel_id] = channel
 
     raw_threads = active_threads_payload.get("threads", [])
@@ -222,8 +218,6 @@ async def async_fetch_discoverable_channels(
                 continue
             channel = _channel_from_payload(payload)
             if channel is None:
-                continue
-            if channel.archived and not include_archived_threads:
                 continue
             discovered[channel.channel_id] = channel
 

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -16,7 +19,7 @@ from .const import (
     ENTRY_DATA_BOT_USER_ID,
     ENTRY_DATA_BOT_USERNAME,
     ENTRY_DATA_GUILD_NAME,
-    OPTION_INCLUDE_ARCHIVED_THREADS,
+    SERVICE_REFRESH_DISCOVERY,
 )
 from .coordinator import GuildState, build_guild_state, merge_discovered_channel_settings
 from .discord_api import (
@@ -27,6 +30,7 @@ from .discord_api import (
     async_fetch_discoverable_channels,
     async_validate_discord_credentials,
 )
+from .discovery import async_schedule_discovery_refresh
 from .gateway import DiscordGatewayHandle, async_start_gateway, async_stop_gateway
 
 type DiscordChatBridgeConfigEntry = ConfigEntry
@@ -46,6 +50,7 @@ class DiscordBridgeRuntimeData:
     discovered_channels: tuple[DiscordChannelDescription, ...]
     drafts: dict[int, str] = field(default_factory=dict)
     gateway_handle: DiscordGatewayHandle | None = None
+    discovery_refresh_task: asyncio.Task[None] | None = None
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -53,6 +58,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     if not hass.data[DOMAIN].get("_views_registered"):
         async_register_views(hass)
         hass.data[DOMAIN]["_views_registered"] = True
+    if not hass.services.has_service(DOMAIN, SERVICE_REFRESH_DISCOVERY):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_REFRESH_DISCOVERY,
+            _make_refresh_discovery_handler(hass),
+            schema=vol.Schema({vol.Optional(CONF_GUILD_ID): int}),
+        )
     return True
 
 
@@ -73,16 +85,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfigE
     except DiscordCannotConnectError as exc:
         raise ConfigEntryNotReady("Could not connect to Discord during setup.") from exc
 
-    include_archived_threads = bool(
-        entry.options.get(OPTION_INCLUDE_ARCHIVED_THREADS, False)
-    )
-
     try:
         discovered_channels = await async_fetch_discoverable_channels(
             session=session,
             bot_token=entry.data[CONF_BOT_TOKEN],
             guild_id=entry.data[CONF_GUILD_ID],
-            include_archived_threads=include_archived_threads,
         )
     except DiscordGuildAccessError as exc:
         raise ConfigEntryAuthFailed(
@@ -138,6 +145,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: DiscordChatBridgeConfig
     runtime = hass.data[DOMAIN].get(entry.entry_id)
     if runtime is not None and runtime.gateway_handle is not None:
         await async_stop_gateway(runtime.gateway_handle)
+    if runtime is not None and runtime.discovery_refresh_task is not None:
+        runtime.discovery_refresh_task.cancel()
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     hass.data[DOMAIN].pop(entry.entry_id, None)
     return True
@@ -148,3 +157,20 @@ async def async_reload_entry(
     entry: DiscordChatBridgeConfigEntry,
 ) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _make_refresh_discovery_handler(
+    hass: HomeAssistant,
+) -> Callable[[ServiceCall], Awaitable[None]]:
+    async def _handler(call: ServiceCall) -> None:
+        requested_guild_id = call.data.get(CONF_GUILD_ID)
+        entries = hass.config_entries.async_entries(DOMAIN)
+        for entry in entries:
+            runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+            if runtime is None:
+                continue
+            if requested_guild_id is not None and runtime.guild_id != requested_guild_id:
+                continue
+            await async_schedule_discovery_refresh(hass, entry, runtime, immediate=True)
+
+    return _handler

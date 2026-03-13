@@ -24,7 +24,6 @@
         "title": "Discord bridge options",
         "data": {
           "recent_message_limit": "Default recent-message limit",
-          "include_archived_threads": "Include archived threads",
           "enabled_channels": "Enabled channels",
           "posting_channels": "Channels allowed to post",
           "api_channels": "Channels exposed through the bridge API"

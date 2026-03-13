@@ -12,6 +12,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import CONF_BOT_TOKEN
 from .coordinator import apply_message_summary
+from .discovery import async_schedule_discovery_refresh
 from .entity import channel_state_signal
 
 _LOGGER = logging.getLogger(__name__)
@@ -87,6 +88,50 @@ class DiscordGatewayClient(discord.Client):
             self._runtime,
             message_summary_from_gateway_message(message),
         )
+
+    async def on_guild_channel_create(self, channel: discord.abc.GuildChannel) -> None:
+        if channel.guild.id != self._runtime.guild_id:
+            return
+        await self._schedule_refresh()
+
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
+        if channel.guild.id != self._runtime.guild_id:
+            return
+        await self._schedule_refresh()
+
+    async def on_guild_channel_update(
+        self,
+        before: discord.abc.GuildChannel,
+        after: discord.abc.GuildChannel,
+    ) -> None:
+        if after.guild.id != self._runtime.guild_id:
+            return
+        await self._schedule_refresh()
+
+    async def on_thread_create(self, thread: discord.Thread) -> None:
+        if thread.guild is None or thread.guild.id != self._runtime.guild_id:
+            return
+        await self._schedule_refresh()
+
+    async def on_thread_delete(self, thread: discord.Thread) -> None:
+        if thread.guild is None or thread.guild.id != self._runtime.guild_id:
+            return
+        await self._schedule_refresh()
+
+    async def on_thread_update(
+        self,
+        before: discord.Thread,
+        after: discord.Thread,
+    ) -> None:
+        if after.guild is None or after.guild.id != self._runtime.guild_id:
+            return
+        await self._schedule_refresh()
+
+    async def _schedule_refresh(self) -> None:
+        entry = self._hass.config_entries.async_get_entry(self._runtime.entry_id)
+        if entry is None:
+            return
+        await async_schedule_discovery_refresh(self._hass, entry, self._runtime)
 
 
 async def _run_gateway_client(

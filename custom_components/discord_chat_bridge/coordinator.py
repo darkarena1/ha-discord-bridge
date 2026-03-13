@@ -5,7 +5,7 @@ from datetime import datetime
 
 from homeassistant.util import dt as dt_util
 
-from .const import OPTION_CHANNELS
+from .const import CHANNEL_KIND_THREAD, OPTION_CHANNELS
 from .discord_api import DiscordChannelDescription
 
 
@@ -35,10 +35,13 @@ def merge_discovered_channel_settings(
 ) -> dict:
     existing_channels = existing_options.get(OPTION_CHANNELS, {})
     merged_channels: dict[str, dict] = {}
+    discovered_ids: set[str] = set()
 
     for channel in discovered_channels:
         existing = existing_channels.get(str(channel.channel_id), {})
-        merged_channels[str(channel.channel_id)] = {
+        channel_id = str(channel.channel_id)
+        discovered_ids.add(channel_id)
+        merged_channels[channel_id] = {
             "name": channel.name,
             "kind": channel.kind,
             "position": channel.position,
@@ -49,10 +52,32 @@ def merge_discovered_channel_settings(
             "include_in_api": existing.get("include_in_api", False),
         }
 
+    for channel_id, channel_data in existing_channels.items():
+        if channel_id in discovered_ids:
+            continue
+        if not _should_preserve_missing_channel(channel_data):
+            continue
+
+        merged_channels[channel_id] = {
+            **channel_data,
+            "archived": True,
+        }
+
     return {
         **existing_options,
         OPTION_CHANNELS: merged_channels,
     }
+
+
+def _should_preserve_missing_channel(channel_data: dict) -> bool:
+    if channel_data.get("kind") != CHANNEL_KIND_THREAD:
+        return False
+
+    return bool(
+        channel_data.get("enabled", False)
+        or channel_data.get("allow_posting", False)
+        or channel_data.get("include_in_api", False)
+    )
 
 
 def build_guild_state(

@@ -48,6 +48,50 @@ def test_merge_discovered_channel_settings_preserves_flags() -> None:
     assert merged["channels"]["200"]["include_in_api"] is False
 
 
+def test_merge_discovered_channel_settings_preserves_enabled_thread_that_went_missing() -> None:
+    existing_options = {
+        "channels": {
+            "200": {
+                "name": "ops-thread",
+                "kind": "thread",
+                "position": 2,
+                "parent_channel_id": 100,
+                "enabled": True,
+                "allow_posting": True,
+                "include_in_api": True,
+                "archived": False,
+            }
+        }
+    }
+
+    merged = merge_discovered_channel_settings(existing_options, [])
+
+    assert merged["channels"]["200"]["enabled"] is True
+    assert merged["channels"]["200"]["allow_posting"] is True
+    assert merged["channels"]["200"]["include_in_api"] is True
+    assert merged["channels"]["200"]["archived"] is True
+
+
+def test_merge_discovered_channel_settings_drops_unconfigured_missing_thread() -> None:
+    existing_options = {
+        "channels": {
+            "200": {
+                "name": "ops-thread",
+                "kind": "thread",
+                "position": 2,
+                "enabled": False,
+                "allow_posting": False,
+                "include_in_api": False,
+                "archived": False,
+            }
+        }
+    }
+
+    merged = merge_discovered_channel_settings(existing_options, [])
+
+    assert merged["channels"] == {}
+
+
 def test_build_guild_state_reads_channel_flags() -> None:
     state = build_guild_state(
         guild_id=123,
