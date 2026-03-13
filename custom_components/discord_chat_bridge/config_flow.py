@@ -244,6 +244,22 @@ def _merge_channel_flag_updates(
     }
 
 
+def _default_disabled_channels(
+    channel_map: dict[str, dict],
+    *,
+    enabled_channels: list[str],
+    capability_key: str,
+) -> list[str]:
+    enabled_ids = set(enabled_channels)
+    return [
+        channel_id
+        for channel_id, channel_data in channel_map.items()
+        if channel_id in enabled_ids
+        and channel_data.get("enabled", False)
+        and not channel_data.get(capability_key, True)
+    ]
+
+
 class DiscordChatBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
@@ -502,12 +518,11 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
             {
                 vol.Required(
                     FORM_POSTING_DISABLED_CHANNELS,
-                    default=[
-                        channel_id
-                        for channel_id, channel_data in channel_map.items()
-                        if channel_id in enabled_channel_ids
-                        and not channel_data.get("allow_posting", True)
-                    ],
+                    default=_default_disabled_channels(
+                        channel_map,
+                        enabled_channels=enabled_channels,
+                        capability_key="allow_posting",
+                    ),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=channel_options,
@@ -517,12 +532,11 @@ class DiscordChatBridgeOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Required(
                     FORM_API_DISABLED_CHANNELS,
-                    default=[
-                        channel_id
-                        for channel_id, channel_data in channel_map.items()
-                        if channel_id in enabled_channel_ids
-                        and not channel_data.get("include_in_api", True)
-                    ],
+                    default=_default_disabled_channels(
+                        channel_map,
+                        enabled_channels=enabled_channels,
+                        capability_key="include_in_api",
+                    ),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=channel_options,

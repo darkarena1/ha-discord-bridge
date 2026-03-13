@@ -11,6 +11,7 @@ from custom_components.discord_chat_bridge.config_flow import (
     EnabledAction,
     _category_selector_options,
     _channel_selector_options,
+    _default_disabled_channels,
     _filter_channel_ids,
     _merge_channel_flag_updates,
     _parse_guild_id,
@@ -153,6 +154,36 @@ def test_merge_channel_flag_updates_defaults_enabled_channels_to_posting_and_api
     assert merged["100"]["include_in_api"] is True
     assert merged["200"]["allow_posting"] is False
     assert merged["200"]["include_in_api"] is True
+
+
+def test_default_disabled_channels_ignores_old_false_flags_for_newly_enabled_channels() -> None:
+    channel_map = {
+        "100": {
+            "name": "general",
+            "kind": "text_channel",
+            "enabled": False,
+            "allow_posting": False,
+            "include_in_api": False,
+        },
+        "200": {
+            "name": "ops-thread",
+            "kind": "thread",
+            "enabled": True,
+            "allow_posting": False,
+            "include_in_api": False,
+        },
+    }
+
+    assert _default_disabled_channels(
+        channel_map,
+        enabled_channels=["100", "200"],
+        capability_key="allow_posting",
+    ) == ["200"]
+    assert _default_disabled_channels(
+        channel_map,
+        enabled_channels=["100", "200"],
+        capability_key="include_in_api",
+    ) == ["200"]
 
 
 def test_parse_guild_id_accepts_digit_strings() -> None:
