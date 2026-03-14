@@ -52,11 +52,21 @@ class DiscordChatBridgeEntity(Entity):
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         return {
-            "channel_id": self.channel_state.channel_id,
+            # Lovelace custom cards run in JavaScript, so Discord snowflakes must
+            # be exposed as strings to avoid precision loss.
+            "channel_id": str(self.channel_state.channel_id),
             "channel_kind": self.channel_state.kind,
-            "parent_channel_id": self.channel_state.parent_channel_id,
+            "parent_channel_id": (
+                str(self.channel_state.parent_channel_id)
+                if self.channel_state.parent_channel_id is not None
+                else None
+            ),
             "parent_channel_name": self.channel_state.parent_channel_name,
-            "category_id": self.channel_state.category_id,
+            "category_id": (
+                str(self.channel_state.category_id)
+                if self.channel_state.category_id is not None
+                else None
+            ),
             "category_name": self.channel_state.category_name,
             "archived": self.channel_state.archived,
             "recent_message_cache_count": len(self.channel_state.recent_messages),

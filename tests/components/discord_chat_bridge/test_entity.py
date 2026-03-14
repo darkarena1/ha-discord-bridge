@@ -40,9 +40,9 @@ def test_entity_marks_archived_thread_unavailable_and_exposes_attributes() -> No
 
     assert entity.available is False
     assert entity.extra_state_attributes == {
-        "channel_id": 100,
+        "channel_id": "100",
         "channel_kind": "thread",
-        "parent_channel_id": 50,
+        "parent_channel_id": "50",
         "parent_channel_name": None,
         "category_id": None,
         "category_name": None,
